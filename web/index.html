@@ -208,6 +208,22 @@ tr:hover { background: var(--bg3); }
     </div>
   </div>
 
+  <!-- 交易记录（详情） -->
+  <div class="panel full-width">
+    <div class="panel-header">
+      <h2>📜 交易记录</h2>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn" onclick="filterTrades('')" id="btnAll">全部</button>
+        <button class="btn" onclick="filterTrades('open')" id="btnOpen">持仓中</button>
+        <button class="btn" onclick="filterTrades('closed')" id="btnClosed">已平仓</button>
+        <span class="badge" id="tradeCount">--</span>
+      </div>
+    </div>
+    <div class="panel-body" style="max-height:600px;">
+      <div id="tradeRecords"><div class="empty">加载中...</div></div>
+    </div>
+  </div>
+
   <!-- 资产管理 -->
   <div class="panel">
     <div class="panel-header">
@@ -301,22 +317,6 @@ tr:hover { background: var(--bg3); }
       <!-- 实验历史 -->
       <div style="margin-bottom:8px;font-size:12px;font-weight:600;color:var(--text2);">实验记录</div>
       <div id="optExperiments" style="font-size:11px;"><div class="empty">加载中...</div></div>
-    </div>
-  </div>
-
-  <!-- 交易记录（详情） -->
-  <div class="panel full-width">
-    <div class="panel-header">
-      <h2>📜 交易记录</h2>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <button class="btn" onclick="filterTrades('')" id="btnAll">全部</button>
-        <button class="btn" onclick="filterTrades('open')" id="btnOpen">持仓中</button>
-        <button class="btn" onclick="filterTrades('closed')" id="btnClosed">已平仓</button>
-        <span class="badge" id="tradeCount">--</span>
-      </div>
-    </div>
-    <div class="panel-body" style="max-height:600px;">
-      <div id="tradeRecords"><div class="empty">加载中...</div></div>
     </div>
   </div>
 
