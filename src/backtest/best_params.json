@@ -5,7 +5,7 @@
   "sl_atr_mult": 1.43,
   "tp_atr_mult": 2.35,
   "trailing_activate_atr": 1.72,
-  "trailing_distance_atr": 0.75,
+  "trailing_distance_atr": 0.82,
   "ema_fast": 20,
   "ema_slow": 53,
   "cooldown_bars": 8,
