@@ -162,6 +162,7 @@ async def api_dashboard(request):
 
     result = {
         "stats": {
+            "total_asset": total_asset,
             "position_count": len(positions),
             "max_positions": 5,
             "today_trades": safe_int(today_stats.get("total")) if today_stats else 0,
