@@ -122,10 +122,6 @@ def _enrich_positions_with_ticker(positions: list, ticker_cache: dict) -> list:
 
 async def api_dashboard(request):
     """前端仪表盘一次拉取所有数据（3秒缓存）"""
-    cached = cache_get("dashboard")
-    if cached:
-        return json_response(cached)
-
     (
         assets, positions, today_stats, win_loss, cum_pnl,
         snapshot, modules, recent_orders, recent_logs, risk_logs,
@@ -187,7 +183,6 @@ async def api_dashboard(request):
         "logs": recent_logs,
         "risk_logs": risk_logs,
     }
-    cache_set("dashboard", result, ttl=3)
     return json_response(result)
 
 
@@ -245,10 +240,7 @@ async def api_trade_records(request):
     limit = int(request.query.get("limit", 50))
     status_filter = request.query.get("status", "")  # open / closed / 空=全部
 
-    cache_key = f"trade_records:{limit}:{status_filter}"
-    cached = cache_get(cache_key)
-    if cached:
-        return json_response(cached)
+
 
     where = ""
     params = []
@@ -367,16 +359,12 @@ async def api_trade_records(request):
         }
         records.append(record)
 
-    cache_set(cache_key, records, ttl=5)
     return json_response(records)
 
 
 # ═══ 熔断状态 ═══
 async def api_circuit_breaker_status(request):
     """获取熔断状态（5秒缓存）"""
-    cached = cache_get("circuit_breaker")
-    if cached:
-        return json_response(cached)
     from src.data.dao import ConfigDAO
     is_paused = (await ConfigDAO.get("circuit_breaker_paused")) == "1"
     reason = (await ConfigDAO.get("circuit_breaker_reason")) or ""
@@ -389,7 +377,6 @@ async def api_circuit_breaker_status(request):
         "daily_pnl": daily_pnl,
         "circuit_limit": 50.0,
     }
-    cache_set("circuit_breaker", result, ttl=5)
     return json_response(result)
 
 
@@ -405,10 +392,7 @@ async def api_circuit_breaker_resume(request):
 async def api_deepseek_logs(request):
     """DeepSeek 策略引擎专属日志（5秒缓存）"""
     limit = int(request.query.get("limit", 30))
-    cache_key = f"deepseek:{limit}"
-    cached = cache_get(cache_key)
-    if cached:
-        return json_response(cached)
+
     logs = await Database.fetch_all(
         "SELECT * FROM system_logs WHERE module='deepseek' ORDER BY id DESC LIMIT %s",
         (limit,)
@@ -418,7 +402,6 @@ async def api_deepseek_logs(request):
         "SELECT * FROM module_status WHERE module_name='deepseek_advisor'"
     )
     result = {"logs": logs, "status": ds_module}
-    cache_set(cache_key, result, ttl=5)
     return json_response(result)
 
 
@@ -563,25 +546,8 @@ async def api_health(request):
 
 
 # ═══ 应用生命周期 ═══
-# ═══ API 缓存层（减少 DB 往返，每次往返 ~160ms） ═══
-_api_cache: dict[str, tuple] = {}  # key → (data, expire_time)
-
-def cache_get(key: str):
-    """获取缓存，过期返回 None"""
-    if key in _api_cache:
-        data, expires = _api_cache[key]
-        if time.time() < expires:
-            return data
-        del _api_cache[key]
-    return None
-
-def cache_set(key: str, data, ttl: float = 3.0):
-    """设置缓存，默认 3 秒 TTL"""
-    _api_cache[key] = (data, time.time() + ttl)
-
-
 async def on_startup(app):
-    await Database.init_pool(min_size=3, max_size=15)
+    await Database.init_pool(min_size=2, max_size=10)
 
 async def on_cleanup(app):
     await Database.close_pool()
