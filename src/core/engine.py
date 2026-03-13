@@ -74,29 +74,75 @@ class TradingEngine:
         })
 
         # 合约面值
+        # 成交额 Top 100 USDT 永续合约 ctVal 映射（自动从 OKX API 获取）
         self._ct_val = {
-            "BTC-USDT-SWAP": 0.01,     # 1张 = 0.01 BTC
-            "ETH-USDT-SWAP": 0.1,      # 1张 = 0.1 ETH
-            "SOL-USDT-SWAP": 1.0,      # 1张 = 1 SOL
-            "DOGE-USDT-SWAP": 1000.0,  # 1张 = 1000 DOGE
-            "ATOM-USDT-SWAP": 1.0,     # 1张 = 1 ATOM
-            "HMSTR-USDT-SWAP": 100.0,  # 1张 = 100 HMSTR
-            "BCH-USDT-SWAP": 0.1,      # 1张 = 0.1 BCH
-            "W-USDT-SWAP": 1.0,        # 1张 = 1 W
-            "STRK-USDT-SWAP": 1.0,     # 1张 = 1 STRK
-            "TON-USDT-SWAP": 1.0,      # 1张 = 1 TON
-            "SEI-USDT-SWAP": 10.0,     # 1张 = 10 SEI
-            "MANA-USDT-SWAP": 10.0,    # 1张 = 10 MANA
-            "ADA-USDT-SWAP": 100.0,    # 1张 = 100 ADA
-            "OP-USDT-SWAP": 1.0,       # 1张 = 1 OP
-            "INJ-USDT-SWAP": 0.1,      # 1张 = 0.1 INJ
+            "ETH-USDT-SWAP": 0.1, "BTC-USDT-SWAP": 0.01, "SOL-USDT-SWAP": 1.0,
+            "TRUMP-USDT-SWAP": 0.1, "DOGE-USDT-SWAP": 1000.0, "RIVER-USDT-SWAP": 0.1,
+            "XRP-USDT-SWAP": 100.0, "XAU-USDT-SWAP": 0.001, "PEPE-USDT-SWAP": 10000000.0,
+            "HYPE-USDT-SWAP": 0.1, "TURBO-USDT-SWAP": 10000.0, "PI-USDT-SWAP": 1.0,
+            "SUI-USDT-SWAP": 1.0, "ENSO-USDT-SWAP": 1.0, "ZEC-USDT-SWAP": 0.01,
+            "ADA-USDT-SWAP": 100.0, "BNB-USDT-SWAP": 0.01, "RESOLV-USDT-SWAP": 10.0,
+            "TAO-USDT-SWAP": 0.01, "TRIA-USDT-SWAP": 100.0, "CL-USDT-SWAP": 0.1,
+            "PUMP-USDT-SWAP": 1000.0, "FIL-USDT-SWAP": 0.1, "XAG-USDT-SWAP": 0.01,
+            "LINK-USDT-SWAP": 1.0, "BCH-USDT-SWAP": 0.1, "PIPPIN-USDT-SWAP": 10.0,
+            "XPL-USDT-SWAP": 10.0, "AVAX-USDT-SWAP": 1.0, "AAVE-USDT-SWAP": 0.1,
+            "WLFI-USDT-SWAP": 10.0, "RENDER-USDT-SWAP": 1.0, "WLD-USDT-SWAP": 1.0,
+            "UNI-USDT-SWAP": 1.0, "AVNT-USDT-SWAP": 1.0, "PENGU-USDT-SWAP": 100.0,
+            "NEAR-USDT-SWAP": 10.0, "DOT-USDT-SWAP": 1.0, "LTC-USDT-SWAP": 1.0,
+            "ROBO-USDT-SWAP": 100.0, "WIF-USDT-SWAP": 1.0, "SHIB-USDT-SWAP": 1000000.0,
+            "FLOW-USDT-SWAP": 10.0, "MOODENG-USDT-SWAP": 10.0, "GALA-USDT-SWAP": 10.0,
+            "HUMA-USDT-SWAP": 100.0, "NIGHT-USDT-SWAP": 100.0, "ICP-USDT-SWAP": 0.01,
+            "ASTER-USDT-SWAP": 1.0, "OKB-USDT-SWAP": 0.01, "CRV-USDT-SWAP": 1.0,
+            "BARD-USDT-SWAP": 1.0, "RAVE-USDT-SWAP": 10.0, "OP-USDT-SWAP": 1.0,
+            "BEAT-USDT-SWAP": 10.0, "ARB-USDT-SWAP": 10.0, "OPN-USDT-SWAP": 10.0,
+            "APT-USDT-SWAP": 1.0, "ETC-USDT-SWAP": 10.0, "SAHARA-USDT-SWAP": 10.0,
+            "LIT-USDT-SWAP": 1.0, "MMT-USDT-SWAP": 10.0, "IP-USDT-SWAP": 1.0,
+            "VIRTUAL-USDT-SWAP": 1.0, "XLM-USDT-SWAP": 100.0, "ENA-USDT-SWAP": 10.0,
+            "F-USDT-SWAP": 100.0, "KAT-USDT-SWAP": 100.0, "BONK-USDT-SWAP": 100000.0,
+            "ORDI-USDT-SWAP": 0.1, "TRX-USDT-SWAP": 1000.0, "HBAR-USDT-SWAP": 100.0,
+            "CFX-USDT-SWAP": 10.0, "FARTCOIN-USDT-SWAP": 1.0, "CHZ-USDT-SWAP": 10.0,
+            "BERA-USDT-SWAP": 0.1, "DOOD-USDT-SWAP": 1000.0, "SATS-USDT-SWAP": 10000000.0,
+            "SIGN-USDT-SWAP": 100.0, "AR-USDT-SWAP": 0.1, "ZRO-USDT-SWAP": 1.0,
+            "MEME-USDT-SWAP": 100.0, "ARKM-USDT-SWAP": 1.0, "ESP-USDT-SWAP": 100.0,
+            "ONDO-USDT-SWAP": 10.0, "JELLYJELLY-USDT-SWAP": 100.0, "AXS-USDT-SWAP": 0.1,
+            "PNUT-USDT-SWAP": 10.0, "DYDX-USDT-SWAP": 1.0, "GRT-USDT-SWAP": 10.0,
+            "ATOM-USDT-SWAP": 1.0, "GRASS-USDT-SWAP": 1.0, "ALGO-USDT-SWAP": 10.0,
+            "PEOPLE-USDT-SWAP": 100.0, "H-USDT-SWAP": 100.0, "BABY-USDT-SWAP": 10.0,
+            "POL-USDT-SWAP": 10.0, "SPACE-USDT-SWAP": 100.0, "CRCL-USDT-SWAP": 1.0,
+            "ZAMA-USDT-SWAP": 10.0,
+            # 保留旧品种（不在 Top100 但可能有历史持仓）
+            "HMSTR-USDT-SWAP": 100.0, "W-USDT-SWAP": 1.0, "STRK-USDT-SWAP": 1.0,
+            "TON-USDT-SWAP": 1.0, "SEI-USDT-SWAP": 10.0, "MANA-USDT-SWAP": 10.0,
+            "INJ-USDT-SWAP": 0.1,
         }
 
-        # 监控品种
+        # 成交额 Top 100 USDT 永续合约
         self.swap_instruments = [
-            "BTC-USDT-SWAP", "ETH-USDT-SWAP", "SOL-USDT-SWAP", "DOGE-USDT-SWAP", "ATOM-USDT-SWAP",
-            "HMSTR-USDT-SWAP", "BCH-USDT-SWAP", "W-USDT-SWAP", "STRK-USDT-SWAP", "TON-USDT-SWAP",
-            "SEI-USDT-SWAP", "MANA-USDT-SWAP", "ADA-USDT-SWAP", "OP-USDT-SWAP", "INJ-USDT-SWAP",
+            "ETH-USDT-SWAP", "BTC-USDT-SWAP", "SOL-USDT-SWAP", "TRUMP-USDT-SWAP",
+            "DOGE-USDT-SWAP", "RIVER-USDT-SWAP", "XRP-USDT-SWAP", "XAU-USDT-SWAP",
+            "PEPE-USDT-SWAP", "HYPE-USDT-SWAP", "TURBO-USDT-SWAP", "PI-USDT-SWAP",
+            "SUI-USDT-SWAP", "ENSO-USDT-SWAP", "ZEC-USDT-SWAP", "ADA-USDT-SWAP",
+            "BNB-USDT-SWAP", "RESOLV-USDT-SWAP", "TAO-USDT-SWAP", "TRIA-USDT-SWAP",
+            "CL-USDT-SWAP", "PUMP-USDT-SWAP", "FIL-USDT-SWAP", "XAG-USDT-SWAP",
+            "LINK-USDT-SWAP", "BCH-USDT-SWAP", "PIPPIN-USDT-SWAP", "XPL-USDT-SWAP",
+            "AVAX-USDT-SWAP", "AAVE-USDT-SWAP", "WLFI-USDT-SWAP", "RENDER-USDT-SWAP",
+            "WLD-USDT-SWAP", "UNI-USDT-SWAP", "AVNT-USDT-SWAP", "PENGU-USDT-SWAP",
+            "NEAR-USDT-SWAP", "DOT-USDT-SWAP", "LTC-USDT-SWAP", "ROBO-USDT-SWAP",
+            "WIF-USDT-SWAP", "SHIB-USDT-SWAP", "FLOW-USDT-SWAP", "MOODENG-USDT-SWAP",
+            "GALA-USDT-SWAP", "HUMA-USDT-SWAP", "NIGHT-USDT-SWAP", "ICP-USDT-SWAP",
+            "ASTER-USDT-SWAP", "OKB-USDT-SWAP", "CRV-USDT-SWAP", "BARD-USDT-SWAP",
+            "RAVE-USDT-SWAP", "OP-USDT-SWAP", "BEAT-USDT-SWAP", "ARB-USDT-SWAP",
+            "OPN-USDT-SWAP", "APT-USDT-SWAP", "ETC-USDT-SWAP", "SAHARA-USDT-SWAP",
+            "LIT-USDT-SWAP", "MMT-USDT-SWAP", "IP-USDT-SWAP", "VIRTUAL-USDT-SWAP",
+            "XLM-USDT-SWAP", "ENA-USDT-SWAP", "F-USDT-SWAP", "KAT-USDT-SWAP",
+            "BONK-USDT-SWAP", "ORDI-USDT-SWAP", "TRX-USDT-SWAP", "HBAR-USDT-SWAP",
+            "CFX-USDT-SWAP", "FARTCOIN-USDT-SWAP", "CHZ-USDT-SWAP", "BERA-USDT-SWAP",
+            "DOOD-USDT-SWAP", "SATS-USDT-SWAP", "SIGN-USDT-SWAP", "AR-USDT-SWAP",
+            "ZRO-USDT-SWAP", "MEME-USDT-SWAP", "ARKM-USDT-SWAP", "ESP-USDT-SWAP",
+            "ONDO-USDT-SWAP", "JELLYJELLY-USDT-SWAP", "AXS-USDT-SWAP", "PNUT-USDT-SWAP",
+            "DYDX-USDT-SWAP", "GRT-USDT-SWAP", "ATOM-USDT-SWAP", "GRASS-USDT-SWAP",
+            "ALGO-USDT-SWAP", "PEOPLE-USDT-SWAP", "H-USDT-SWAP", "BABY-USDT-SWAP",
+            "POL-USDT-SWAP", "SPACE-USDT-SWAP", "CRCL-USDT-SWAP", "ZAMA-USDT-SWAP",
         ]
         self.spot_instruments = ["BTC-USDT", "ETH-USDT"]
         self.all_instruments = self.swap_instruments + self.spot_instruments
