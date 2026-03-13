@@ -27,9 +27,32 @@ WEB_DIR = os.path.dirname(os.path.abspath(__file__))
 AUTH_USERS = {
     "admin": hashlib.sha256("Zhuo198919@".encode()).hexdigest(),
 }
-# token -> {user, expires}
+# token -> {user, expires}  持久化到文件，重启不丢失
 _tokens: dict[str, dict] = {}
 TOKEN_EXPIRE = 7 * 24 * 3600  # 7天有效
+_TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", "logs", "tokens.json")
+
+def _load_tokens():
+    global _tokens
+    try:
+        if os.path.exists(_TOKEN_FILE):
+            with open(_TOKEN_FILE, "r") as f:
+                _tokens = json.loads(f.read())
+            # 清理过期 token
+            now = time.time()
+            _tokens = {k: v for k, v in _tokens.items() if v.get("expires", 0) > now}
+    except Exception:
+        _tokens = {}
+
+def _save_tokens():
+    try:
+        os.makedirs(os.path.dirname(_TOKEN_FILE), exist_ok=True)
+        with open(_TOKEN_FILE, "w") as f:
+            f.write(json.dumps(_tokens))
+    except Exception:
+        pass
+
+_load_tokens()
 
 # 不需要认证的路径（页面本身公开，API 需要认证）
 PUBLIC_PATHS = {"/", "/login", "/health", "/api/login"}
@@ -521,6 +544,7 @@ async def api_login(request):
     if username in AUTH_USERS and AUTH_USERS[username] == pwd_hash:
         token = secrets.token_hex(32)
         _tokens[token] = {"user": username, "expires": time.time() + TOKEN_EXPIRE}
+        _save_tokens()
         return json_response({"ok": True, "token": token, "user": username})
 
     return json_response({"ok": False, "error": "用户名或密码错误"}, status=401)
