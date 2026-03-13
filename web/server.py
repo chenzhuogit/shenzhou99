@@ -409,6 +409,45 @@ async def api_snapshots(request):
     return json_response(snapshots)
 
 
+# ═══ 自动优化日志 ═══
+async def api_optimize_logs(request):
+    """返回优化实验日志 + 当前最优参数"""
+    result = {"best_params": {}, "experiments": [], "log_tail": ""}
+
+    # 最优参数
+    params_file = os.path.join(os.path.dirname(__file__), "../src/backtest/best_params.json")
+    try:
+        with open(params_file, "r") as f:
+            result["best_params"] = json.load(f)
+    except Exception:
+        pass
+
+    # 实验记录 (results.tsv)
+    tsv_file = os.path.join(os.path.dirname(__file__), "../src/backtest/results.tsv")
+    try:
+        with open(tsv_file, "r") as f:
+            lines = f.readlines()
+        if len(lines) > 1:
+            headers = lines[0].strip().split("\t")
+            for line in lines[-30:]:  # 最近30条
+                cols = line.strip().split("\t")
+                if len(cols) >= len(headers):
+                    result["experiments"].append(dict(zip(headers, cols)))
+    except Exception:
+        pass
+
+    # 优化日志尾部
+    log_file = os.path.join(os.path.dirname(__file__), "../logs/optimize.log")
+    try:
+        with open(log_file, "r") as f:
+            all_lines = f.readlines()
+            result["log_tail"] = "".join(all_lines[-50:])
+    except Exception:
+        pass
+
+    return json_response(result)
+
+
 # ═══ 健康检查 ═══
 async def api_health(request):
     return json_response({"status": "ok", "system": "shenzhou99", "db": "mysql"})
@@ -462,6 +501,7 @@ app.router.add_get("/api/modules", api_modules)
 app.router.add_get("/api/config", api_config)
 app.router.add_post("/api/config", api_config_set)
 app.router.add_get("/api/performance", api_strategy_perf)
+app.router.add_get("/api/optimize", api_optimize_logs)
 app.router.add_get("/api/snapshots", api_snapshots)
 
 app.router.add_static("/static/", WEB_DIR)

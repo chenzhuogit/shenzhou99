@@ -284,6 +284,26 @@ tr:hover { background: var(--bg3); }
     </div>
   </div>
 
+  <!-- 自动优化引擎 -->
+  <div class="panel full-width">
+    <div class="panel-header" style="border-bottom:2px solid var(--cyan);">
+      <h2>🧬 自动策略优化 <span style="font-size:10px;color:var(--cyan);font-weight:400;">autoresearch · 每6小时</span></h2>
+      <span class="badge" id="optExpCount">--</span>
+    </div>
+    <div class="panel-body" style="max-height:450px;">
+      <!-- 最优参数卡片 -->
+      <div id="optParamsCard" style="background:var(--bg3);border:1px solid var(--cyan);border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <span style="font-size:13px;font-weight:700;color:var(--cyan);">🏆 当前最优参数</span>
+        </div>
+        <div id="optParamsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;font-size:11px;"></div>
+      </div>
+      <!-- 实验历史 -->
+      <div style="margin-bottom:8px;font-size:12px;font-weight:600;color:var(--text2);">实验记录</div>
+      <div id="optExperiments" style="font-size:11px;"><div class="empty">加载中...</div></div>
+    </div>
+  </div>
+
   <!-- 交易记录（详情） -->
   <div class="panel full-width">
     <div class="panel-header">
@@ -342,20 +362,23 @@ let tradeRecordsData = [];
 let tradeFilter = '';
 let dsData = null;
 let cbData = null;
+let optData = null;
 
 async function fetchDashboard() {
   try {
     const filterQ = tradeFilter ? `&status=${tradeFilter}` : '';
-    const [dashResp, tradeResp, dsResp, cbResp] = await Promise.all([
+    const [dashResp, tradeResp, dsResp, cbResp, optResp] = await Promise.all([
       fetch(API + '/api/dashboard'),
       fetch(API + '/api/trade-records?limit=50' + filterQ),
       fetch(API + '/api/deepseek?limit=20'),
       fetch(API + '/api/circuit-breaker'),
+      fetch(API + '/api/optimize'),
     ]);
     dashData = await dashResp.json();
     tradeRecordsData = await tradeResp.json();
     dsData = await dsResp.json();
     cbData = await cbResp.json();
+    optData = await optResp.json();
     document.getElementById('statusDot').className = 'dot';
     document.getElementById('statusText').textContent = '运行中';
     renderAll();
@@ -374,6 +397,7 @@ function renderAll() {
   renderPositions(dashData.positions);
   renderAssets(dashData.assets);
   renderDeepSeek(dsData);
+  renderOptimize(optData);
   renderTradeRecords(tradeRecordsData);
   renderLogs(dashData.logs);
 }
@@ -617,6 +641,68 @@ function filterTrades(status) {
   document.getElementById('btnOpen').style.borderColor = status==='open' ? 'var(--green)' : 'var(--border)';
   document.getElementById('btnClosed').style.borderColor = status==='closed' ? 'var(--yellow)' : 'var(--border)';
   fetchDashboard();
+}
+
+function renderOptimize(data) {
+  if (!data) return;
+
+  // 最优参数
+  const grid = document.getElementById('optParamsGrid');
+  const params = data.best_params || {};
+  const paramLabels = {
+    adx_threshold: 'ADX门槛',
+    adx_threshold_eth: 'ETH ADX门槛',
+    min_confidence: '最低信心',
+    sl_atr_mult: '止损(ATR)',
+    tp_atr_mult: '止盈(ATR)',
+    trailing_activate_atr: '移动止盈激活',
+    trailing_distance_atr: '跟随距离',
+    ema_fast: 'EMA快线',
+    ema_slow: 'EMA慢线',
+    cooldown_bars: '冷却(4H根)',
+    max_distance_ema: '最大距EMA',
+  };
+  grid.innerHTML = Object.entries(params).map(([k, v]) => {
+    const label = paramLabels[k] || k;
+    return `<div style="background:var(--bg2);padding:6px 10px;border-radius:6px;border:1px solid var(--border);">
+      <div style="color:var(--text2);font-size:9px;text-transform:uppercase;">${label}</div>
+      <div style="font-size:14px;font-weight:700;color:var(--cyan);margin-top:2px;">${v}</div>
+    </div>`;
+  }).join('');
+
+  // 实验记录
+  const expDiv = document.getElementById('optExperiments');
+  const exps = data.experiments || [];
+  document.getElementById('optExpCount').textContent = `${exps.length} 次实验`;
+
+  if (!exps.length) {
+    expDiv.innerHTML = '<div class="empty">暂无优化记录</div>';
+    return;
+  }
+
+  // 反转显示最新的在前
+  const reversed = [...exps].reverse();
+  expDiv.innerHTML = `<table><thead><tr>
+    <th>轮次</th><th>评分</th><th>净利润</th><th>胜率</th><th>Sharpe</th><th>回撤</th><th>状态</th><th>变更</th>
+  </tr></thead><tbody>` + reversed.map(e => {
+    const score = parseFloat(e.score || 0);
+    const status = e.status || '';
+    let statusIcon = '❌';
+    let rowStyle = '';
+    if (status === 'keep') { statusIcon = '✅'; rowStyle = 'background:rgba(16,185,129,0.08);'; }
+    else if (status === 'baseline') { statusIcon = '📊'; rowStyle = 'background:rgba(59,130,246,0.08);'; }
+    const pnl = parseFloat(e.net_pnl || 0);
+    return `<tr style="${rowStyle}">
+      <td>${e.round || '-'}</td>
+      <td style="font-weight:600;${score > 3 ? 'color:var(--green)' : score < 0 ? 'color:var(--red)' : ''}">${score.toFixed(2)}</td>
+      <td class="${pnl >= 0 ? 'positive' : 'negative'}">$${pnl.toFixed(1)}</td>
+      <td>${(parseFloat(e.win_rate || 0) * 100).toFixed(0)}%</td>
+      <td>${parseFloat(e.sharpe || 0).toFixed(1)}</td>
+      <td>${parseFloat(e.max_dd || 0).toFixed(1)}%</td>
+      <td>${statusIcon}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--text2);" title="${e.changes || ''}">${e.changes || '-'}</td>
+    </tr>`;
+  }).join('') + '</tbody></table>';
 }
 
 function renderTradeRecords(records) {
