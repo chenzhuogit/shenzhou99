@@ -462,6 +462,20 @@ async def api_optimize_logs(request):
     return json_response(result)
 
 
+# ═══ xAI 情绪分析 ═══
+async def api_xai_sentiment(request):
+    """返回 xAI 情绪分析结果"""
+    try:
+        from src.advisor.xai_sentiment import XAISentimentAnalyzer
+        analyzer = XAISentimentAnalyzer()
+        if not analyzer.available:
+            return json_response({"error": "xAI 未配置", "data": {}})
+        summary = await analyzer.get_summary()
+        return json_response({"data": summary})
+    except Exception as e:
+        return json_response({"error": str(e), "data": {}})
+
+
 # ═══ 登录 ═══
 async def api_login(request):
     try:
@@ -589,6 +603,7 @@ app.router.add_get("/api/config", api_config)
 app.router.add_post("/api/config", api_config_set)
 app.router.add_get("/api/performance", api_strategy_perf)
 app.router.add_get("/api/optimize", api_optimize_logs)
+app.router.add_get("/api/sentiment", api_xai_sentiment)
 app.router.add_get("/api/snapshots", api_snapshots)
 
 app.router.add_static("/static/", WEB_DIR)

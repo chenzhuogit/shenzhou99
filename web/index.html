@@ -304,6 +304,19 @@ tr:hover { background: var(--bg3); }
     </div>
   </div>
 
+  <!-- xAI 社交媒体情绪 -->
+  <div class="panel full-width">
+    <div class="panel-header" style="border-bottom:2px solid #f59e0b;">
+      <h2>📱 社交媒体情绪 <span style="font-size:10px;color:#f59e0b;font-weight:400;">xAI Grok · Twitter/X 实时</span></h2>
+      <button class="btn" onclick="refreshSentiment()">刷新情绪</button>
+    </div>
+    <div class="panel-body">
+      <div id="sentimentGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
+        <div class="empty">加载中...</div>
+      </div>
+    </div>
+  </div>
+
   <!-- 自动优化引擎 -->
   <div class="panel full-width">
     <div class="panel-header" style="border-bottom:2px solid var(--cyan);">
@@ -706,6 +719,70 @@ function filterTrades(status) {
   document.getElementById('btnOpen').style.borderColor = status==='open' ? 'var(--green)' : 'var(--border)';
   document.getElementById('btnClosed').style.borderColor = status==='closed' ? 'var(--yellow)' : 'var(--border)';
   fetchDashboard();
+}
+
+async function refreshSentiment() {
+  const grid = document.getElementById('sentimentGrid');
+  grid.innerHTML = '<div class="empty">分析中... (约30秒)</div>';
+  try {
+    const resp = await authFetch(API + '/api/sentiment');
+    const data = await resp.json();
+    renderSentiment(data);
+  } catch(e) {
+    grid.innerHTML = '<div class="empty">加载失败: ' + e.message + '</div>';
+  }
+}
+
+function renderSentiment(data) {
+  const grid = document.getElementById('sentimentGrid');
+  if (!data || data.error) {
+    grid.innerHTML = `<div class="empty">${data?.error || '未配置 xAI'}</div>`;
+    return;
+  }
+  const coins = data.data || {};
+  if (!Object.keys(coins).length) {
+    grid.innerHTML = '<div class="empty">暂无情绪数据</div>';
+    return;
+  }
+
+  const sentColors = {bullish:'var(--green)', bearish:'var(--red)', neutral:'var(--text2)'};
+  const fgColors = (s) => s > 75 ? 'var(--red)' : s > 55 ? '#f59e0b' : s > 40 ? 'var(--text2)' : s > 25 ? '#60a5fa' : 'var(--green)';
+  const signalEmoji = {strong_buy:'🟢🟢', buy:'🟢', hold:'⚪', sell:'🔴', strong_sell:'🔴🔴'};
+
+  grid.innerHTML = Object.entries(coins).map(([coin, d]) => {
+    if (d.error) return `<div style="background:var(--bg3);border-radius:8px;padding:12px;border:1px solid var(--border);">
+      <div style="font-weight:700;margin-bottom:4px;">${coin}</div>
+      <div style="font-size:10px;color:var(--text2);">${d.error}</div>
+    </div>`;
+
+    const score = d.score || 0;
+    const fg = d.fear_greed_score || 50;
+    return `<div style="background:var(--bg3);border-radius:8px;padding:12px;border:1px solid var(--border);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-weight:700;font-size:14px;">${coin}</span>
+        <span style="font-size:18px;">${signalEmoji[d.signal] || '⚪'}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px;">
+        <span>情绪</span>
+        <span style="font-weight:600;color:${sentColors[d.sentiment] || 'var(--text)'}">${d.sentiment} (${score > 0 ? '+' : ''}${score.toFixed(2)})</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px;">
+        <span>恐惧贪婪</span>
+        <span style="font-weight:600;color:${fgColors(fg)}">${d.fear_greed} (${fg})</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px;">
+        <span>鲸鱼</span>
+        <span style="font-weight:600;">${d.whale || '中性'}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px;">
+        <span>FOMO</span>
+        <span>${d.fomo || 'none'}</span>
+      </div>
+      ${d.narratives && d.narratives.length ? `<div style="font-size:9px;color:var(--text2);margin-top:4px;border-top:1px solid var(--border);padding-top:4px;">
+        ${d.narratives.slice(0,2).join(' · ')}
+      </div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function renderOptimize(data) {
