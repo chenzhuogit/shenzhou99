@@ -1177,15 +1177,17 @@ class TradingEngine:
         """
         智能止盈引擎（每 30 秒检查一次）
 
-        四阶段止盈策略：
-        Phase 1 - initial:     浮盈 < 1ATR → 不动，等行情发展
-        Phase 2 - breakeven:   浮盈 ≥ 1ATR → 止损移到成本价（保本）
-        Phase 3 - trailing:    浮盈 ≥ 2ATR → 分批平仓 50% + 阶梯移动止损
-        Phase 4 - accelerating: 浮盈 ≥ 3ATR → 紧跟价格，止损=最高盈利-0.75ATR
+        五阶段止盈策略（v2 — 解决"盈利不止盈反亏"问题）：
+        Phase 0 - watching:     浮盈 < 0.5ATR → 记录最高盈利，准备保护
+        Phase 1 - protecting:   浮盈 ≥ 0.5ATR → 止损移到 -0.3ATR（微亏保护）
+        Phase 2 - breakeven:    浮盈 ≥ 1ATR → 止损移到成本+0.1ATR（保本）
+        Phase 3 - trailing:     浮盈 ≥ 1.5ATR → 分批平仓 50% + 阶梯移动止损
+        Phase 4 - accelerating: 浮盈 ≥ 2.5ATR → 紧跟价格，止损=最高盈利-0.5ATR
 
         额外规则：
-        - 时间止盈: 持仓 > 12h 且浮盈 < 0.5ATR → 平仓
-        - 趋势逆转: 1H 趋势反向 + 浮盈回撤 > 50% → 平仓
+        - 浮盈回撤保护: 峰值 > 0.8ATR 且回撤 > 60% → 立即平仓
+        - 时间止盈: 持仓 > 8h 且浮盈 < 0.3ATR → 平仓
+        - 趋势逆转: 1H 趋势反向 + 浮盈回撤 > 40% → 平仓
         """
         while self._running:
             await asyncio.sleep(30)
@@ -1197,7 +1199,15 @@ class TradingEngine:
                 logger.error(f"移动止盈异常: {e}")
 
     async def _manage_position_tp(self, p: dict):
-        """管理单个持仓的止盈"""
+        """
+        管理单个持仓的止盈（v2 — 更积极锁利）
+
+        核心改进：
+        1. 浮盈 0.5ATR 就开始保护（旧版要 1ATR）
+        2. 峰值回撤 > 60% 直接平仓（旧版 50%，且要 1ATR 峰值）
+        3. 分批止盈从 2ATR 降到 1.5ATR
+        4. 加速跟踪从 3ATR 降到 2.5ATR，距离从 0.75 缩到 0.5
+        """
         inst_id = p["inst_id"]
         pos_side = p.get("pos_side", "")
         state_key = f"{inst_id}_{pos_side}"
@@ -1213,7 +1223,6 @@ class TradingEngine:
         cur_px = float(p.get("current_price", 0) or self._tickers.get(inst_id, {}).get("last", 0))
         cur_px = float(cur_px)
         size = float(p.get("size", 0))
-        lever = int(p.get("leverage", 5))
 
         if avg_px <= 0 or cur_px <= 0 or size <= 0:
             return
@@ -1231,10 +1240,10 @@ class TradingEngine:
                 "entry_price": avg_px,
                 "highest_profit_atr": max(profit_atr, 0),
                 "current_sl": avg_px - atr * 2 if pos_side == "long" else avg_px + atr * 2,
-                "phase": "initial",
+                "phase": "watching",
                 "partial_closed": False,
                 "total_sz": size,
-                "entry_time": time.time() - 3600,  # 未知，假设1小时前
+                "entry_time": time.time() - 3600,
             }
             self._trailing_state[state_key] = state
 
@@ -1243,47 +1252,72 @@ class TradingEngine:
             state["highest_profit_atr"] = profit_atr
 
         old_phase = state["phase"]
+        peak = state["highest_profit_atr"]
         close_side = "sell" if pos_side == "long" else "buy"
-
-        # ── 时间止盈：持仓超过12小时且浮盈很小 → 释放资金 ──
         hold_hours = (time.time() - state["entry_time"]) / 3600
-        if hold_hours > 12 and profit_atr < 0.5 and profit_atr > -0.5:
+
+        # ═══ 紧急规则（优先级最高，任何阶段都检查） ═══
+
+        # ── 浮盈回撤保护：峰值曾到 0.8ATR 以上，回撤超过 60% → 立即平仓锁利 ──
+        if peak >= 0.8 and profit_atr < peak * 0.4:
+            logger.info(
+                f"⚡ 浮盈回撤保护: {inst_id} {pos_side} | "
+                f"峰值{peak:.2f}ATR→当前{profit_atr:.2f}ATR 回撤{(1-profit_atr/peak)*100:.0f}% → 平仓")
+            await self._close_position_market(inst_id, pos_side, size,
+                f"浮盈回撤保护 峰值{peak:.1f}→{profit_atr:.1f}ATR")
+            self._trailing_state.pop(state_key, None)
+            return
+
+        # ── 盈利变亏损保护：曾经盈利 0.5ATR 以上，现在变亏了 → 立即平仓 ──
+        if peak >= 0.5 and profit_atr <= 0:
+            logger.info(
+                f"🚨 盈转亏保护: {inst_id} {pos_side} | "
+                f"峰值{peak:.2f}ATR→当前{profit_atr:.2f}ATR → 平仓止损")
+            await self._close_position_market(inst_id, pos_side, size,
+                f"盈转亏保护 峰值{peak:.1f}ATR")
+            self._trailing_state.pop(state_key, None)
+            return
+
+        # ── 时间止盈：持仓超过 8 小时且浮盈很小 → 释放资金 ──
+        if hold_hours > 8 and -0.3 < profit_atr < 0.3:
             logger.info(f"⏰ 时间止盈: {inst_id} {pos_side} | 持仓{hold_hours:.1f}h 浮盈{profit_atr:.1f}ATR → 平仓")
             await self._close_position_market(inst_id, pos_side, size, f"时间止盈 {hold_hours:.0f}h")
             self._trailing_state.pop(state_key, None)
             return
 
-        # ── 趋势逆转止盈 ──
+        # ── 趋势逆转止盈：1H 趋势反向 + 浮盈回撤 > 40% ──
         if "1H" in self._klines.get(inst_id, {}):
             trend_1h, str_1h = self._assess_trend(self._klines[inst_id]["1H"])
-            # 趋势反向 + 浮盈从高位回撤超过50%
-            peak = state["highest_profit_atr"]
-            if peak > 1.0 and profit_atr < peak * 0.5:
-                is_reversed = (pos_side == "long" and trend_1h == "short" and str_1h > 0.5) or \
-                              (pos_side == "short" and trend_1h == "long" and str_1h > 0.5)
+            if peak > 0.6 and profit_atr < peak * 0.6:
+                is_reversed = (pos_side == "long" and trend_1h == "short" and str_1h > 0.4) or \
+                              (pos_side == "short" and trend_1h == "long" and str_1h > 0.4)
                 if is_reversed:
-                    logger.info(f"🔄 趋势逆转止盈: {inst_id} {pos_side} | 峰值{peak:.1f}ATR→{profit_atr:.1f}ATR 1H={trend_1h}")
+                    logger.info(
+                        f"🔄 趋势逆转止盈: {inst_id} {pos_side} | "
+                        f"峰值{peak:.1f}ATR→{profit_atr:.1f}ATR 1H={trend_1h}")
                     await self._close_position_market(inst_id, pos_side, size, f"趋势逆转 1H={trend_1h}")
                     self._trailing_state.pop(state_key, None)
                     return
 
-        # ── Phase 4: accelerating（浮盈 ≥ 3ATR 紧跟模式） ──
-        if profit_atr >= 3.0:
+        # ═══ 阶段式止盈（从高到低检查） ═══
+
+        # ── Phase 4: accelerating（浮盈 ≥ 2.5ATR 紧跟模式） ──
+        if profit_atr >= 2.5:
             state["phase"] = "accelerating"
-            # 紧跟：止损 = 最高盈利 - 0.75ATR
+            # 紧跟：止损 = 最高盈利 - 0.5ATR（比旧版 0.75 更紧）
             if pos_side == "long":
-                new_sl = avg_px + (state["highest_profit_atr"] - 0.75) * atr
+                new_sl = avg_px + (peak - 0.5) * atr
                 if new_sl > state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
                     logger.info(f"🚀 加速跟踪: {inst_id} {pos_side} SL→{new_sl:.2f} (盈利{profit_atr:.1f}ATR)")
             else:
-                new_sl = avg_px - (state["highest_profit_atr"] - 0.75) * atr
+                new_sl = avg_px - (peak - 0.5) * atr
                 if new_sl < state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
                     logger.info(f"🚀 加速跟踪: {inst_id} {pos_side} SL→{new_sl:.2f} (盈利{profit_atr:.1f}ATR)")
 
-        # ── Phase 3: trailing（浮盈 ≥ 2ATR 阶梯模式 + 分批平仓） ──
-        elif profit_atr >= 2.0:
+        # ── Phase 3: trailing（浮盈 ≥ 1.5ATR 阶梯模式 + 分批平仓） ──
+        elif profit_atr >= 1.5:
             state["phase"] = "trailing"
 
             # 分批止盈：平掉 50%
@@ -1294,35 +1328,51 @@ class TradingEngine:
                     await self._close_position_market(inst_id, pos_side, close_sz, f"分批止盈50% 盈利{profit_atr:.1f}ATR")
                     state["partial_closed"] = True
 
-            # 阶梯移动止损：每涨1ATR上移0.75ATR
-            atr_steps = int(profit_atr)  # 整数ATR倍数
+            # 阶梯移动止损
             if pos_side == "long":
-                new_sl = avg_px + (atr_steps - 1) * atr * 0.75
+                new_sl = avg_px + (profit_atr - 1.0) * atr * 0.8
                 if new_sl > state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
             else:
-                new_sl = avg_px - (atr_steps - 1) * atr * 0.75
+                new_sl = avg_px - (profit_atr - 1.0) * atr * 0.8
                 if new_sl < state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
 
-        # ── Phase 2: breakeven（浮盈 ≥ 1ATR 移到成本） ──
+        # ── Phase 2: breakeven（浮盈 ≥ 1ATR 移到成本+手续费） ──
         elif profit_atr >= 1.0:
             state["phase"] = "breakeven"
             if pos_side == "long":
-                new_sl = avg_px + atr * 0.1  # 略高于成本，覆盖手续费
+                new_sl = avg_px + atr * 0.15  # 覆盖手续费
                 if new_sl > state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
                     logger.info(f"🔒 保本止损: {inst_id} {pos_side} SL→{new_sl:.2f}")
             else:
-                new_sl = avg_px - atr * 0.1
+                new_sl = avg_px - atr * 0.15
                 if new_sl < state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
                     logger.info(f"🔒 保本止损: {inst_id} {pos_side} SL→{new_sl:.2f}")
+
+        # ── Phase 1: protecting（浮盈 ≥ 0.5ATR 微亏保护） ──
+        elif profit_atr >= 0.5:
+            state["phase"] = "protecting"
+            # 止损上移到仅亏 0.3ATR 的位置（而非原始的 1.5-2ATR 远）
+            if pos_side == "long":
+                new_sl = avg_px - atr * 0.3
+                if new_sl > state["current_sl"]:
+                    await self._update_sl(inst_id, pos_side, new_sl, size, state)
+                    logger.info(f"🛡️ 微亏保护: {inst_id} {pos_side} SL→{new_sl:.2f} (浮盈{profit_atr:.1f}ATR)")
+            else:
+                new_sl = avg_px + atr * 0.3
+                if new_sl < state["current_sl"]:
+                    await self._update_sl(inst_id, pos_side, new_sl, size, state)
+                    logger.info(f"🛡️ 微亏保护: {inst_id} {pos_side} SL→{new_sl:.2f} (浮盈{profit_atr:.1f}ATR)")
+
+        # ── Phase 0: watching — 什么都不做，等待 ──
 
         if old_phase != state["phase"]:
             await SystemLogDAO.log("INFO", "engine",
                 f"📊 止盈阶段: {inst_id} {pos_side} {old_phase}→{state['phase']} | "
-                f"盈利={profit_atr:.1f}ATR 峰值={state['highest_profit_atr']:.1f}ATR")
+                f"盈利={profit_atr:.1f}ATR 峰值={peak:.1f}ATR")
 
     async def _update_sl(self, inst_id: str, pos_side: str, new_sl: float, size: float, state: dict):
         """更新止损：撤旧单 + 挂新单"""

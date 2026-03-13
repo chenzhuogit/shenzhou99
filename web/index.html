@@ -1028,6 +1028,9 @@ function renderTradeRecords(records) {
           ${r.strategy ? ` · 策略: <span style="color:var(--cyan);">${r.strategy}</span>` : ''}
         </div>
       </div>
+      <div style="text-align:right;margin-top:6px;">
+        <button class="btn" style="font-size:10px;padding:3px 10px;" onclick="copyTrade(this, ${JSON.stringify(JSON.stringify(r)).replace(/'/g,'\\u0027')})">📋 复制</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1044,6 +1047,63 @@ function renderLogs(logs) {
       <span class="log-msg">[${l.module}] ${l.message}</span>
     </div>
   `).join('') || '<div class="empty">无匹配日志</div>';
+}
+
+function copyTrade(btn, jsonStr) {
+  try {
+    const r = JSON.parse(jsonStr);
+    const dir = r.pos_side === 'long' ? '做多' : '做空';
+    const status = r.pos_status === 'open' ? '持仓中' : '已平仓';
+    const pnl = r.pos_status === 'open' ? (r.unrealized_pnl || 0) : (r.realized_pnl || 0);
+    const ctVal = r.inst_id.includes('BTC') ? 0.01 : r.inst_id.includes('ETH') ? 0.1 : 1;
+    const entryPx = r.filled_price || r.avg_price;
+    const notional = r.size * ctVal * entryPx;
+    const margin = r.margin || (notional / (r.leverage || 5));
+
+    const lines = [
+      `📋 神州99 交易记录`,
+      `━━━━━━━━━━━━━━━━━`,
+      `品种: ${r.inst_id}`,
+      `方向: ${dir} | 状态: ${status}`,
+      `策略: ${r.strategy || '-'}`,
+      ``,
+      `📊 价格`,
+      `开仓均价: $${r.avg_price}`,
+      r.pos_status === 'open' ? `当前价格: $${r.current_price}` : `平仓价格: $${r.current_price}`,
+      ``,
+      `📐 仓位`,
+      `数量: ${r.size} 张`,
+      `名义价值: $${notional.toFixed(0)}`,
+      `保证金: $${margin.toFixed(2)} (${r.leverage}x)`,
+      ``,
+      `💰 盈亏`,
+      `${r.pos_status === 'open' ? '浮动盈亏' : '最终盈亏'}: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(4)}`,
+      `手续费: -$${Math.abs(r.fee || 0).toFixed(4)}`,
+      ``,
+      `🛡️ 风控`,
+      r.stop_loss > 0 ? `止损: $${r.stop_loss}` : '止损: -',
+      r.take_profit > 0 ? `止盈: $${r.take_profit}` : '止盈: -',
+      r.reward_risk_ratio > 0 ? `盈亏比: ${r.reward_risk_ratio.toFixed(1)}:1` : '',
+      r.liquidation_price > 0 ? `强平价: $${r.liquidation_price}` : '',
+      `信心度: ${r.confidence > 0 ? (r.confidence * 100).toFixed(0) + '%' : '-'}`,
+      ``,
+      `⏰ 时间`,
+      `开仓: ${r.opened_at || '-'}`,
+      r.closed_at ? `平仓: ${r.closed_at}` : '',
+      r.duration ? `持仓时长: ${r.duration}` : '',
+      ``,
+      `📝 理由`,
+      r.signal_reason || r.signal_detail || '系统手动操作',
+    ].filter(l => l !== '').join('\n');
+
+    navigator.clipboard.writeText(lines).then(() => {
+      btn.textContent = '✅ 已复制';
+      setTimeout(() => { btn.textContent = '📋 复制'; }, 1500);
+    });
+  } catch(e) {
+    btn.textContent = '❌ 失败';
+    setTimeout(() => { btn.textContent = '📋 复制'; }, 1500);
+  }
 }
 
 // ═══ 操作 ═══
