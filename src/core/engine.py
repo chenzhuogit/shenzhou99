@@ -876,14 +876,13 @@ class TradingEngine:
             if atr > 0 and signal.price > 0:
                 atr_pct = atr / signal.price
 
-        # 基础杠杆 = 信心映射（降杠杆：手续费占亏损61%，杠杆越高手续费越贵）
+        # 基础杠杆 = 信心映射
+        # 降杠杆! 数据证明: ≥5x亏损占93%(-$85), <5x只亏$6
         if conf >= 0.85:
-            base = 6
-        elif conf >= 0.75:
-            base = 5
-        elif conf >= 0.65:
             base = 4
-        elif conf >= 0.55:
+        elif conf >= 0.75:
+            base = 3
+        elif conf >= 0.65:
             base = 3
         else:
             base = 2
@@ -907,7 +906,7 @@ class TradingEngine:
         elif losses >= 2:
             base -= 1
 
-        leverage = max(2, min(base, 6))  # 上限从10降到6
+        leverage = max(2, min(base, 4))  # 上限从6降到4（数据驱动：5x+亏损占93%）
 
         logger.info(
             f"⚙️ 杠杆={leverage}x | 信心{conf:.0%} ATR{atr_pct:.3%} RR={rr:.1f} 连亏{losses} "
@@ -1053,17 +1052,19 @@ class TradingEngine:
 
         # ── 动态仓位计算 ──
         # 保证金比例跟信心挂钩：趋势确定就上仓位
+        # 保证金比例（降仓！数据显示大仓位亏损严重）
+        # 100品种分散 → 每笔小仓位 → 靠胜率赚钱不靠单笔大赌
         conf = signal.confidence
         if conf >= 0.85:
-            margin_pct = 0.30    # 强趋势 → 30%
+            margin_pct = 0.15    # 强趋势 → 15%（旧30%太激进）
         elif conf >= 0.75:
-            margin_pct = 0.25    # 明确趋势 → 25%
+            margin_pct = 0.12    # 明确趋势 → 12%
         elif conf >= 0.65:
-            margin_pct = 0.18    # 中等趋势 → 18%
+            margin_pct = 0.10    # 中等趋势 → 10%
         elif conf >= 0.60:
-            margin_pct = 0.12    # 刚过门槛 → 12%
+            margin_pct = 0.08    # 刚过门槛 → 8%
         else:
-            margin_pct = 0.08
+            margin_pct = 0.05
 
         # 连亏减仓
         if self.risk.state.consecutive_losses >= 3:

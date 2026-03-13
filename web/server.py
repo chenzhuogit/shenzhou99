@@ -547,7 +547,7 @@ async def api_health(request):
 
 # ═══ 应用生命周期 ═══
 async def on_startup(app):
-    await Database.init_pool(min_size=2, max_size=10)
+    await Database.init_pool(min_size=1, max_size=5)
 
 async def on_cleanup(app):
     await Database.close_pool()
