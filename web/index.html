@@ -1096,14 +1096,40 @@ function copyTrade(btn, jsonStr) {
       r.signal_reason || r.signal_detail || '系统手动操作',
     ].filter(l => l !== '').join('\n');
 
-    navigator.clipboard.writeText(lines).then(() => {
-      btn.textContent = '✅ 已复制';
-      setTimeout(() => { btn.textContent = '📋 复制'; }, 1500);
-    });
+    // 兼容 HTTP（navigator.clipboard 需要 HTTPS）
+    const ta = document.createElement('textarea');
+    ta.value = lines;
+    ta.style.cssText = 'position:fixed;left:-9999px;';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+
+    // 弹出提示
+    btn.textContent = '✅ 已复制';
+    showToast('📋 交易信息已复制到剪贴板');
+    setTimeout(() => { btn.textContent = '📋 复制'; }, 2000);
   } catch(e) {
     btn.textContent = '❌ 失败';
-    setTimeout(() => { btn.textContent = '📋 复制'; }, 1500);
+    showToast('复制失败: ' + e.message, true);
+    setTimeout(() => { btn.textContent = '📋 复制'; }, 2000);
   }
+}
+
+function showToast(msg, isError) {
+  let toast = document.getElementById('globalToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'globalToast';
+    toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;transition:opacity 0.3s;pointer-events:none;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.background = isError ? '#ef4444' : '#10b981';
+  toast.style.color = '#fff';
+  toast.style.opacity = '1';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 2500);
 }
 
 // ═══ 操作 ═══

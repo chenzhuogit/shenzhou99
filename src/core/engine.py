@@ -457,9 +457,9 @@ class TradingEngine:
                 except Exception:
                     pass
 
-                await PositionDAO.close_position(inst_id, pos_side, pnl)
+                net = pnl + pos_fee  # 净利 = 毛利 + 手续费（手续费为负数）
+                await PositionDAO.close_position(inst_id, pos_side, net)
                 self.risk.record_trade_result(pnl, pos_fee)
-                net = pnl + pos_fee
                 await SystemLogDAO.log("INFO", "engine",
                     f"📤 平仓 {inst_id} {pos_side} | 毛利=${pnl:.2f} 手续费=${pos_fee:.2f} 净利=${net:.2f}")
             else:

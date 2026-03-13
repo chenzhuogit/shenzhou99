@@ -250,6 +250,27 @@ async def api_trade_records(request):
         LIMIT %s
     """, (*params, limit))
 
+    # ── 批量查询已平仓持仓的真实盈亏（从 trades 表） ──
+    closed_pnl_map = {}  # (inst_id, pos_side, opened_at) → {pnl, fee, net}
+    closed_positions = [(r["inst_id"], r["pos_side"], r["opened_at"], r["closed_at"])
+                        for r in rows if r.get("pos_status") == "closed" or r.get("status") == "closed"]
+    if closed_positions:
+        for inst_id, pos_side, opened_at, closed_at in closed_positions:
+            if not opened_at or not closed_at:
+                continue
+            trade_rows = await Database.fetch_all("""
+                SELECT COALESCE(SUM(pnl), 0) as total_pnl, COALESCE(SUM(fee), 0) as total_fee
+                FROM trades
+                WHERE inst_id = %s AND pos_side = %s
+                  AND traded_at >= %s AND traded_at <= DATE_ADD(%s, INTERVAL 2 MINUTE)
+            """, (inst_id, pos_side, opened_at, closed_at))
+            if trade_rows:
+                pnl = float(trade_rows[0]["total_pnl"])
+                fee = float(trade_rows[0]["total_fee"])
+                closed_pnl_map[(inst_id, pos_side, str(opened_at))] = {
+                    "pnl": pnl, "fee": fee, "net": pnl + fee
+                }
+
     records = []
     seen_ids = set()
     for r in rows:
@@ -264,15 +285,19 @@ async def api_trade_records(request):
         unr_pnl = float(r.get("unrealized_pnl", 0) or 0)
         real_pnl = float(r.get("realized_pnl", 0) or 0)
         pos_status = r.get("pos_status", "")
+        total_fee = float(r.get("fee", 0) or 0)
 
-        # 已平仓时，计算最终盈亏
-        if pos_status == "closed" and cur_px > 0 and avg_px > 0:
-            ct_val = 0.01 if "BTC" in r["inst_id"] else 0.1 if "ETH" in r["inst_id"] else 1
-            sz = float(r.get("size", 0) or 0)
-            if r.get("pos_side") == "long":
-                real_pnl = (cur_px - avg_px) * sz * ct_val
-            else:
-                real_pnl = (avg_px - cur_px) * sz * ct_val
+        # 已平仓：用 trades 表的真实数据（含手续费）
+        if pos_status == "closed":
+            key = (r["inst_id"], r.get("pos_side", ""), str(r.get("opened_at", "")))
+            if key in closed_pnl_map:
+                td = closed_pnl_map[key]
+                real_pnl = td["net"]  # pnl + fee = 真实净盈亏
+                total_fee = td["fee"]
+                # 重算收益率
+                margin = float(r.get("margin", 0) or 0)
+                if margin > 0:
+                    pnl_ratio = real_pnl / margin * 100
 
         # 持仓时长
         opened = r.get("opened_at")
@@ -301,7 +326,7 @@ async def api_trade_records(request):
             "filled_price": float(r.get("filled_price", 0) or 0),
             "current_price": cur_px,
             "mark_price": float(r.get("mark_price", 0) or 0),
-            "fee": float(r.get("fee", 0) or 0),
+            "fee": total_fee,
             "strategy": r.get("strategy_name") or r.get("pos_strategy") or "",
             "signal_reason": r.get("signal_reason", "") or "",
             "signal_detail": r.get("signal_detail", "") or "",
