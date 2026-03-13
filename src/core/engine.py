@@ -750,8 +750,8 @@ class TradingEngine:
             if rsi_1h > 70:  # 从75收紧到70
                 return None
 
-            # 止损：4H EMA50 下方，至少 1.5 ATR
-            sl = min(ema50_4h - atr_4h * 0.5, current_price - atr_4h * 1.5)
+            # 止损：固定 1.5 ATR（不再用 EMA50 兜底，避免 SL 太远导致 RR 不足）
+            sl = current_price - atr_4h * 1.5
             tp = current_price + atr_4h * 2.35
 
             # 止盈距离必须 > 0.3%（覆盖手续费+滑点）
@@ -762,6 +762,7 @@ class TradingEngine:
 
             rr = abs(tp - current_price) / abs(current_price - sl)
             if rr < 1.5:
+                logger.info(f"⏸️ {inst_id} | RR={rr:.1f}<1.5 盈亏比不足")
                 return None
 
             return Signal(
@@ -779,7 +780,7 @@ class TradingEngine:
             if rsi_1h < 30:  # 从25收紧到30
                 return None
 
-            sl = max(ema50_4h + atr_4h * 0.5, current_price + atr_4h * 1.5)
+            sl = current_price + atr_4h * 1.5
             tp = current_price - atr_4h * 2.35
 
             tp_pct = abs(current_price - tp) / current_price
@@ -789,6 +790,7 @@ class TradingEngine:
 
             rr = abs(current_price - tp) / abs(sl - current_price)
             if rr < 1.5:
+                logger.info(f"⏸️ {inst_id} | RR={rr:.1f}<1.5 盈亏比不足")
                 return None
 
             return Signal(
