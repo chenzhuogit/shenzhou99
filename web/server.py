@@ -464,14 +464,20 @@ async def api_optimize_logs(request):
 
 # ═══ xAI 情绪分析 ═══
 async def api_xai_sentiment(request):
-    """返回 xAI 情绪分析结果"""
+    """返回 xAI 情绪分析结果（使用缓存）"""
     try:
-        from src.advisor.xai_sentiment import XAISentimentAnalyzer
-        analyzer = XAISentimentAnalyzer()
+        from src.advisor.xai_sentiment import get_analyzer
+        analyzer = get_analyzer()
         if not analyzer.available:
             return json_response({"error": "xAI 未配置", "data": {}})
-        summary = await analyzer.get_summary()
-        return json_response({"data": summary})
+
+        # ?refresh=1 强制刷新（消耗 token）
+        if request.query.get("refresh") == "1":
+            summary = await analyzer.force_refresh()
+        else:
+            summary = await analyzer.get_summary()
+
+        return json_response(summary)
     except Exception as e:
         return json_response({"error": str(e), "data": {}})
 

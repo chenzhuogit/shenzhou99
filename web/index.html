@@ -307,8 +307,12 @@ tr:hover { background: var(--bg3); }
   <!-- xAI 社交媒体情绪 -->
   <div class="panel full-width">
     <div class="panel-header" style="border-bottom:2px solid #f59e0b;">
-      <h2>📱 社交媒体情绪 <span style="font-size:10px;color:#f59e0b;font-weight:400;">xAI Grok · Twitter/X 实时</span></h2>
-      <button class="btn" onclick="refreshSentiment(true)">刷新情绪</button>
+      <h2>📱 社交媒体情绪 <span style="font-size:10px;color:#f59e0b;font-weight:400;">xAI Grok · 30分钟缓存</span></h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span id="sentimentMood" style="font-size:11px;color:var(--text2);"></span>
+        <span id="sentimentTokens" style="font-size:10px;color:var(--text2);"></span>
+        <button class="btn" onclick="refreshSentiment(true)">🔄 刷新</button>
+      </div>
     </div>
     <div class="panel-body">
       <div id="sentimentGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
@@ -728,21 +732,22 @@ function filterTrades(status) {
 }
 
 let _sentimentData = null;
-let _sentimentTime = 0;
 
 async function refreshSentiment(force) {
-  // 5分钟缓存（除非手动强制刷新）
-  if (!force && _sentimentData && Date.now() - _sentimentTime < 300000) {
+  const grid = document.getElementById('sentimentGrid');
+
+  // 非强制 + 已有数据 → 直接渲染（零API调用）
+  if (!force && _sentimentData && _sentimentData.data && Object.keys(_sentimentData.data).length) {
     renderSentiment(_sentimentData);
     return;
   }
-  const grid = document.getElementById('sentimentGrid');
-  grid.innerHTML = '<div class="empty" style="grid-column:1/-1;">📱 正在分析 Twitter/X 实时舆情...<br><span style="font-size:10px;">首次加载约 15 秒</span></div>';
+
+  grid.innerHTML = '<div class="empty" style="grid-column:1/-1;">📱 正在分析 Twitter/X 实时舆情...<br><span style="font-size:10px;">首次约 10 秒，后续使用 30 分钟缓存</span></div>';
   try {
-    const resp = await authFetch(API + '/api/sentiment');
+    const url = force ? '/api/sentiment?refresh=1' : '/api/sentiment';
+    const resp = await authFetch(API + url);
     const data = await resp.json();
     _sentimentData = data;
-    _sentimentTime = Date.now();
     renderSentiment(data);
   } catch(e) {
     grid.innerHTML = '<div class="empty" style="grid-column:1/-1;">加载失败: ' + e.message + '</div>';
@@ -755,6 +760,14 @@ function renderSentiment(data) {
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1;">${data?.error || '未配置 xAI'}</div>`;
     return;
   }
+
+  // 市场情绪 + token 消耗
+  const moodEl = document.getElementById('sentimentMood');
+  const tokenEl = document.getElementById('sentimentTokens');
+  const moodMap = {bullish:'🟢 看涨', bearish:'🔴 看跌', neutral:'⚪ 中性'};
+  if (moodEl) moodEl.textContent = '市场: ' + (moodMap[data.market_mood] || data.market_mood || '');
+  if (tokenEl && data.tokens_used) tokenEl.textContent = `${data.tokens_used} tokens`;
+
   const coins = data.data || {};
   if (!Object.keys(coins).length) {
     grid.innerHTML = '<div class="empty" style="grid-column:1/-1;">暂无情绪数据，点击「刷新情绪」</div>';
@@ -764,7 +777,7 @@ function renderSentiment(data) {
   const sentColors = {bullish:'#10b981', bearish:'#ef4444', neutral:'#64748b'};
   const sentLabel = {bullish:'看涨', bearish:'看跌', neutral:'中性'};
   const fgColors = (s) => s > 75 ? '#ef4444' : s > 55 ? '#f59e0b' : s > 40 ? '#64748b' : s > 25 ? '#60a5fa' : '#10b981';
-  const signalLabel = {strong_buy:'强力买入', buy:'买入', hold:'观望', sell:'卖出', strong_sell:'强力卖出'};
+  const signalLabelMap = {strong_buy:'强力买入', buy:'买入', hold:'观望', sell:'卖出', strong_sell:'强力卖出'};
   const signalColor = {strong_buy:'#10b981', buy:'#10b981', hold:'#64748b', sell:'#ef4444', strong_sell:'#ef4444'};
   const whaleEmoji = {'吸筹':'🐋↑', '出货':'🐋↓', '中性':'🐋'};
 
@@ -795,7 +808,7 @@ function renderSentiment(data) {
       <!-- 币种 + 信号 -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;margin-top:2px;">
         <span style="font-weight:700;font-size:16px;">${coin}</span>
-        <span style="font-size:11px;font-weight:600;color:${signalColor[sig]};background:${signalColor[sig]}15;padding:2px 8px;border-radius:10px;">${signalLabel[sig] || sig}</span>
+        <span style="font-size:11px;font-weight:600;color:${signalColor[sig]};background:${signalColor[sig]}15;padding:2px 8px;border-radius:10px;">${d.signal_label || signalLabelMap[sig] || sig}</span>
       </div>
 
       <!-- 情绪评分条 -->
