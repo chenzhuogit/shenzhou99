@@ -3,6 +3,9 @@ import os
 import sys
 import json
 import asyncio
+import hashlib
+import secrets
+import time
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -19,6 +22,17 @@ from src.data.dao import (
 
 PORT = 8899
 WEB_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ═══ 认证 ═══
+AUTH_USERS = {
+    "admin": hashlib.sha256("Zhuo198919@".encode()).hexdigest(),
+}
+# token -> {user, expires}
+_tokens: dict[str, dict] = {}
+TOKEN_EXPIRE = 7 * 24 * 3600  # 7天有效
+
+# 不需要认证的路径
+PUBLIC_PATHS = {"/login", "/health", "/api/login"}
 
 
 def json_serial(obj):
@@ -448,6 +462,29 @@ async def api_optimize_logs(request):
     return json_response(result)
 
 
+# ═══ 登录 ═══
+async def api_login(request):
+    try:
+        body = await request.json()
+    except Exception:
+        return json_response({"ok": False, "error": "请求格式错误"}, status=400)
+
+    username = body.get("username", "").strip()
+    password = body.get("password", "")
+    pwd_hash = hashlib.sha256(password.encode()).hexdigest()
+
+    if username in AUTH_USERS and AUTH_USERS[username] == pwd_hash:
+        token = secrets.token_hex(32)
+        _tokens[token] = {"user": username, "expires": time.time() + TOKEN_EXPIRE}
+        return json_response({"ok": True, "token": token, "user": username})
+
+    return json_response({"ok": False, "error": "用户名或密码错误"}, status=401)
+
+
+async def login_page(request):
+    return web.FileResponse(os.path.join(WEB_DIR, "login.html"))
+
+
 # ═══ 健康检查 ═══
 async def api_health(request):
     return json_response({"status": "ok", "system": "shenzhou99", "db": "mysql"})
@@ -461,7 +498,32 @@ async def on_cleanup(app):
     await Database.close_pool()
 
 
-# ═══ CORS 中间件 ═══
+# ═══ 认证检查 ═══
+def check_token(request) -> bool:
+    """检查请求是否带有效 token"""
+    # Header: Authorization: Bearer <token>
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        token = auth[7:]
+    else:
+        # Query: ?token=xxx
+        token = request.query.get("token", "")
+
+    if not token:
+        return False
+
+    info = _tokens.get(token)
+    if not info:
+        return False
+
+    if time.time() > info["expires"]:
+        del _tokens[token]
+        return False
+
+    return True
+
+
+# ═══ CORS + Auth 中间件 ═══
 @web.middleware
 async def cors_middleware(request, handler):
     if request.method == "OPTIONS":
@@ -470,14 +532,39 @@ async def cors_middleware(request, handler):
         resp = await handler(request)
     resp.headers["Access-Control-Allow-Origin"] = "*"
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return resp
 
 
+@web.middleware
+async def auth_middleware(request, handler):
+    path = request.path
+
+    # 公开路径不需要认证
+    if path in PUBLIC_PATHS:
+        return await handler(request)
+
+    # 静态资源不需要认证（login.html 的 CSS/JS）
+    if path.startswith("/static/"):
+        return await handler(request)
+
+    # 检查 token
+    if not check_token(request):
+        # API 请求返回 401
+        if path.startswith("/api/"):
+            return web.json_response({"error": "未登录"}, status=401)
+        # 页面请求重定向到登录
+        raise web.HTTPFound("/login")
+
+    return await handler(request)
+
+
 # ═══ 路由 ═══
-app = web.Application(middlewares=[cors_middleware])
+app = web.Application(middlewares=[cors_middleware, auth_middleware])
 
 app.router.add_get("/", index)
+app.router.add_get("/login", login_page)
+app.router.add_post("/api/login", api_login)
 app.router.add_get("/health", api_health)
 
 # 聚合接口

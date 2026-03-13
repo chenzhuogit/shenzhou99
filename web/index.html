@@ -140,6 +140,7 @@ tr:hover { background: var(--bg3); }
   <div style="display:flex;align-items:center;gap:24px;">
     <div class="status"><div class="dot" id="statusDot"></div><span id="statusText">连接中...</span></div>
     <div class="time" id="headerTime"></div>
+    <button onclick="logout()" style="background:none;border:1px solid #475569;color:#94a3b8;padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;" title="退出登录">退出</button>
   </div>
 </div>
 
@@ -360,6 +361,28 @@ function fmtDateTime(iso) {
   return d.toLocaleString('zh-CN', {hour12:false, month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'});
 }
 
+// ═══ 认证 ═══
+const SZ99_TOKEN = localStorage.getItem('sz99_token') || '';
+if (!SZ99_TOKEN) { window.location.href = '/login'; }
+
+function authFetch(url, opts = {}) {
+  opts.headers = opts.headers || {};
+  opts.headers['Authorization'] = 'Bearer ' + SZ99_TOKEN;
+  return fetch(url, opts).then(resp => {
+    if (resp.status === 401) {
+      localStorage.removeItem('sz99_token');
+      window.location.href = '/login';
+      throw new Error('未登录');
+    }
+    return resp;
+  });
+}
+
+function logout() {
+  localStorage.removeItem('sz99_token');
+  window.location.href = '/login';
+}
+
 // ═══ 数据拉取 ═══
 let tradeRecordsData = [];
 let tradeFilter = '';
@@ -371,11 +394,11 @@ async function fetchDashboard() {
   try {
     const filterQ = tradeFilter ? `&status=${tradeFilter}` : '';
     const [dashResp, tradeResp, dsResp, cbResp, optResp] = await Promise.all([
-      fetch(API + '/api/dashboard'),
-      fetch(API + '/api/trade-records?limit=50' + filterQ),
-      fetch(API + '/api/deepseek?limit=20'),
-      fetch(API + '/api/circuit-breaker'),
-      fetch(API + '/api/optimize'),
+      authFetch(API + '/api/dashboard'),
+      authFetch(API + '/api/trade-records?limit=50' + filterQ),
+      authFetch(API + '/api/deepseek?limit=20'),
+      authFetch(API + '/api/circuit-breaker'),
+      authFetch(API + '/api/optimize'),
     ]);
     dashData = await dashResp.json();
     tradeRecordsData = await tradeResp.json();
@@ -582,7 +605,7 @@ function renderCircuitBreaker(data) {
 async function resumeTrading() {
   if (!confirm('确认解除熔断？引擎将恢复交易。')) return;
   try {
-    const resp = await fetch(API + '/api/circuit-breaker/resume', {method:'POST'});
+    const resp = await authFetch(API + '/api/circuit-breaker/resume', {method:'POST'});
     const data = await resp.json();
     alert(data.message || '已提交');
     fetchDashboard();
@@ -888,12 +911,12 @@ function renderLogs(logs) {
 // ═══ 操作 ═══
 async function closePos(instId, posSide) {
   if (!confirm(`确认平仓 ${instId} ${posSide}？`)) return;
-  await fetch(API+'/api/positions/close', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({inst_id:instId,pos_side:posSide})});
+  await authFetch(API+'/api/positions/close', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({inst_id:instId,pos_side:posSide})});
   fetchDashboard();
 }
 async function closeAll() {
   if (!confirm('⚠️ 确认全部平仓？')) return;
-  await fetch(API+'/api/positions/close-all', {method:'POST'});
+  await authFetch(API+'/api/positions/close-all', {method:'POST'});
   fetchDashboard();
 }
 function filterLog(level) { currentLogFilter = level; if(dashData) renderLogs(dashData.logs); }
