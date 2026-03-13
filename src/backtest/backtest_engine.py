@@ -44,6 +44,9 @@ class BacktestConfig:
     trailing_enabled: bool = True
     trailing_activate_atr: float = 1.5  # 移动止盈激活（ATR倍数）
     trailing_distance_atr: float = 0.8  # 移动止盈跟随距离
+    ema_fast: int = 20                  # 快速EMA周期
+    ema_slow: int = 50                  # 慢速EMA周期
+    max_distance_ema: float = 1.5       # 距EMA最大入场距离(ATR)
 
 
 @dataclass
@@ -274,15 +277,15 @@ class BacktestEngine:
         if np.isnan(adx) or adx < adx_min:
             return None
 
-        # EMA
-        ema20 = float(calc_ema(close, 20).iloc[-1])
-        ema50 = float(calc_ema(close, 50).iloc[-1])
+        # EMA（可配置周期）
+        ema_f = float(calc_ema(close, self.cfg.ema_fast).iloc[-1])
+        ema_s = float(calc_ema(close, self.cfg.ema_slow).iloc[-1])
 
         # 趋势方向
         trend = "neutral"
-        if ema20 > ema50 and current_price > ema20:
+        if ema_f > ema_s and current_price > ema_f:
             trend = "long"
-        elif ema20 < ema50 and current_price < ema20:
+        elif ema_f < ema_s and current_price < ema_f:
             trend = "short"
 
         if trend == "neutral":
@@ -295,8 +298,8 @@ class BacktestEngine:
             return None
 
         # 距 EMA 距离
-        distance = abs(current_price - ema20) / atr
-        if distance > 1.5:
+        distance = abs(current_price - ema_f) / atr
+        if distance > self.cfg.max_distance_ema:
             return None  # 不追
 
         # RSI
@@ -316,12 +319,12 @@ class BacktestEngine:
         if trend == "long":
             if rsi > 75:
                 return None
-            sl = min(ema50 - atr * 0.5, current_price - atr * self.cfg.sl_atr_mult)
+            sl = min(ema_s - atr * 0.5, current_price - atr * self.cfg.sl_atr_mult)
             tp = current_price + atr * self.cfg.tp_atr_mult
         else:
             if rsi < 25:
                 return None
-            sl = max(ema50 + atr * 0.5, current_price + atr * self.cfg.sl_atr_mult)
+            sl = max(ema_s + atr * 0.5, current_price + atr * self.cfg.sl_atr_mult)
             tp = current_price - atr * self.cfg.tp_atr_mult
 
         rr = abs(tp - current_price) / abs(current_price - sl) if abs(current_price - sl) > 0 else 0

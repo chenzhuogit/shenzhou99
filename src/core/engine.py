@@ -606,16 +606,16 @@ class TradingEngine:
         # ═══ 第一关：ADX — 有没有趋势？ ═══
         adx = self._calc_adx(df_4h, 14)
         # ETH 波动大、假突破多，需要更强的趋势确认
-        adx_min = 30 if "ETH" in inst_id else 25
+        adx_min = 30 if "ETH" in inst_id else 26
         if adx < adx_min:
             logger.info(f"⏸️ {inst_id} | ADX={adx:.0f}<{adx_min} 无趋势，等待")
             return None
 
         # ═══ 第二关：趋势方向 ═══
         ema20_4h = float(close_4h.ewm(span=20, adjust=False).mean().iloc[-1])
-        ema50_4h = float(close_4h.ewm(span=50, adjust=False).mean().iloc[-1])
+        ema50_4h = float(close_4h.ewm(span=53, adjust=False).mean().iloc[-1])
         ema20_1h = float(close_1h.ewm(span=20, adjust=False).mean().iloc[-1])
-        ema50_1h = float(close_1h.ewm(span=50, adjust=False).mean().iloc[-1])
+        ema50_1h = float(close_1h.ewm(span=53, adjust=False).mean().iloc[-1])
 
         # 4H 趋势（必须明确）
         trend_4h = "neutral"
@@ -692,7 +692,7 @@ class TradingEngine:
 
             # 止损：4H EMA50 下方（趋势线不破就不出），至少 1.5 ATR 留空间
             sl = min(ema50_4h - atr_4h * 0.5, current_price - atr_4h * 1.5)
-            tp = current_price + atr_4h * 2.5
+            tp = current_price + atr_4h * 2.35
             rr = abs(tp - current_price) / abs(current_price - sl)
             if rr < 1.5:
                 return None
@@ -713,7 +713,7 @@ class TradingEngine:
                 return None
 
             sl = max(ema50_4h + atr_4h * 0.5, current_price + atr_4h * 1.5)
-            tp = current_price - atr_4h * 2.5
+            tp = current_price - atr_4h * 2.35
             rr = abs(current_price - tp) / abs(sl - current_price)
             if rr < 1.5:
                 return None
@@ -736,7 +736,7 @@ class TradingEngine:
             return "neutral", 0.0
 
         ema20 = close.ewm(span=20, adjust=False).mean()
-        ema50 = close.ewm(span=50, adjust=False).mean()
+        ema50 = close.ewm(span=53, adjust=False).mean()
 
         # MACD
         ema12 = close.ewm(span=12, adjust=False).mean()
@@ -1181,7 +1181,7 @@ class TradingEngine:
         Phase 1 - initial:     浮盈 < 1ATR → 不动，等行情发展
         Phase 2 - breakeven:   浮盈 ≥ 1ATR → 止损移到成本价（保本）
         Phase 3 - trailing:    浮盈 ≥ 2ATR → 分批平仓 50% + 阶梯移动止损
-        Phase 4 - accelerating: 浮盈 ≥ 3ATR → 紧跟价格，止损=最高盈利-0.8ATR
+        Phase 4 - accelerating: 浮盈 ≥ 3ATR → 紧跟价格，止损=最高盈利-0.75ATR
 
         额外规则：
         - 时间止盈: 持仓 > 12h 且浮盈 < 0.5ATR → 平仓
@@ -1270,14 +1270,14 @@ class TradingEngine:
         # ── Phase 4: accelerating（浮盈 ≥ 3ATR 紧跟模式） ──
         if profit_atr >= 3.0:
             state["phase"] = "accelerating"
-            # 紧跟：止损 = 最高盈利 - 0.8ATR
+            # 紧跟：止损 = 最高盈利 - 0.75ATR
             if pos_side == "long":
-                new_sl = avg_px + (state["highest_profit_atr"] - 0.8) * atr
+                new_sl = avg_px + (state["highest_profit_atr"] - 0.75) * atr
                 if new_sl > state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
                     logger.info(f"🚀 加速跟踪: {inst_id} {pos_side} SL→{new_sl:.2f} (盈利{profit_atr:.1f}ATR)")
             else:
-                new_sl = avg_px - (state["highest_profit_atr"] - 0.8) * atr
+                new_sl = avg_px - (state["highest_profit_atr"] - 0.75) * atr
                 if new_sl < state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
                     logger.info(f"🚀 加速跟踪: {inst_id} {pos_side} SL→{new_sl:.2f} (盈利{profit_atr:.1f}ATR)")
@@ -1294,14 +1294,14 @@ class TradingEngine:
                     await self._close_position_market(inst_id, pos_side, close_sz, f"分批止盈50% 盈利{profit_atr:.1f}ATR")
                     state["partial_closed"] = True
 
-            # 阶梯移动止损：每涨1ATR上移0.8ATR
+            # 阶梯移动止损：每涨1ATR上移0.75ATR
             atr_steps = int(profit_atr)  # 整数ATR倍数
             if pos_side == "long":
-                new_sl = avg_px + (atr_steps - 1) * atr * 0.8
+                new_sl = avg_px + (atr_steps - 1) * atr * 0.75
                 if new_sl > state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
             else:
-                new_sl = avg_px - (atr_steps - 1) * atr * 0.8
+                new_sl = avg_px - (atr_steps - 1) * atr * 0.75
                 if new_sl < state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
 
@@ -1491,7 +1491,7 @@ class TradingEngine:
             if kline_1h is not None and len(kline_1h) > 50:
                 close = kline_1h["close"]
                 ema20 = close.ewm(span=20, adjust=False).mean()
-                ema50 = close.ewm(span=50, adjust=False).mean()
+                ema50 = close.ewm(span=53, adjust=False).mean()
                 ema12 = close.ewm(span=12, adjust=False).mean()
                 ema26 = close.ewm(span=26, adjust=False).mean()
                 macd = ema12 - ema26

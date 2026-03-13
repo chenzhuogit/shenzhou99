@@ -1,0 +1,103 @@
+{
+  "version": "1.0",
+  "description": "神州99 策略参数优化空间",
+  "params": {
+    "adx_threshold": {
+      "current": 25,
+      "min": 18,
+      "max": 40,
+      "step": 1,
+      "type": "int",
+      "description": "ADX趋势强度门槛"
+    },
+    "adx_threshold_eth": {
+      "current": 30,
+      "min": 25,
+      "max": 45,
+      "step": 1,
+      "type": "int",
+      "description": "ETH专用ADX门槛（波动大需更高）"
+    },
+    "min_confidence": {
+      "current": 0.60,
+      "min": 0.45,
+      "max": 0.80,
+      "step": 0.05,
+      "type": "float",
+      "description": "最低信心门槛"
+    },
+    "sl_atr_mult": {
+      "current": 1.5,
+      "min": 0.8,
+      "max": 3.0,
+      "step": 0.1,
+      "type": "float",
+      "description": "止损ATR倍数"
+    },
+    "tp_atr_mult": {
+      "current": 2.5,
+      "min": 1.5,
+      "max": 5.0,
+      "step": 0.25,
+      "type": "float",
+      "description": "止盈ATR倍数"
+    },
+    "trailing_activate_atr": {
+      "current": 1.5,
+      "min": 0.8,
+      "max": 3.0,
+      "step": 0.1,
+      "type": "float",
+      "description": "移动止盈激活(ATR倍数)"
+    },
+    "trailing_distance_atr": {
+      "current": 0.8,
+      "min": 0.3,
+      "max": 1.5,
+      "step": 0.1,
+      "type": "float",
+      "description": "移动止盈跟随距离(ATR倍数)"
+    },
+    "ema_fast": {
+      "current": 20,
+      "min": 10,
+      "max": 40,
+      "step": 2,
+      "type": "int",
+      "description": "快速EMA周期"
+    },
+    "ema_slow": {
+      "current": 50,
+      "min": 30,
+      "max": 100,
+      "step": 5,
+      "type": "int",
+      "description": "慢速EMA周期"
+    },
+    "cooldown_bars": {
+      "current": 8,
+      "min": 4,
+      "max": 20,
+      "step": 2,
+      "type": "int",
+      "description": "冷却时间(4H根数)"
+    },
+    "max_distance_ema": {
+      "current": 1.5,
+      "min": 0.5,
+      "max": 3.0,
+      "step": 0.25,
+      "type": "float",
+      "description": "距EMA最大入场距离(ATR)"
+    }
+  },
+  "scoring": {
+    "formula": "net_pnl_pct * sharpe / max(max_dd_pct, 1.0)",
+    "description": "综合评分 = 收益率 × 夏普比 / 最大回撤"
+  },
+  "constraints": {
+    "min_trades": 5,
+    "max_drawdown_pct": 30.0,
+    "min_win_rate": 0.40
+  }
+}

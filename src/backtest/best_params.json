@@ -1,0 +1,13 @@
+{
+  "adx_threshold": 26,
+  "adx_threshold_eth": 30,
+  "min_confidence": 0.6,
+  "sl_atr_mult": 1.5,
+  "tp_atr_mult": 2.35,
+  "trailing_activate_atr": 1.5,
+  "trailing_distance_atr": 0.75,
+  "ema_fast": 20,
+  "ema_slow": 53,
+  "cooldown_bars": 8,
+  "max_distance_ema": 1.5
+}
