@@ -1029,7 +1029,7 @@ function renderTradeRecords(records) {
         </div>
       </div>
       <div style="text-align:right;margin-top:6px;">
-        <button class="btn" style="font-size:10px;padding:3px 10px;" onclick="copyTrade(this, ${JSON.stringify(JSON.stringify(r)).replace(/'/g,'\\u0027')})">📋 复制</button>
+        <button class="btn" style="font-size:10px;padding:3px 10px;" data-trade='${JSON.stringify(r).replace(/'/g,"&#39;").replace(/</g,"&lt;")}' onclick="copyTrade(this)">📋 复制</button>
       </div>
     </div>`;
   }).join('');
@@ -1049,9 +1049,9 @@ function renderLogs(logs) {
   `).join('') || '<div class="empty">无匹配日志</div>';
 }
 
-function copyTrade(btn, jsonStr) {
+function copyTrade(btn) {
   try {
-    const r = JSON.parse(jsonStr);
+    const r = JSON.parse(btn.getAttribute('data-trade'));
     const dir = r.pos_side === 'long' ? '做多' : '做空';
     const status = r.pos_status === 'open' ? '持仓中' : '已平仓';
     const pnl = r.pos_status === 'open' ? (r.unrealized_pnl || 0) : (r.realized_pnl || 0);
