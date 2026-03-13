@@ -635,6 +635,16 @@ app.router.add_post("/api/config", api_config_set)
 app.router.add_get("/api/performance", api_strategy_perf)
 app.router.add_get("/api/optimize", api_optimize_logs)
 app.router.add_get("/api/sentiment", api_xai_sentiment)
+
+# ═══ 交易决策权限规范 ═══
+# 🚫 严禁 Claude（AI助手）自主执行任何交易操作，包括但不限于：
+#    - 手动调用 place_order / close_position
+#    - 通过脚本或代码直接下单/平仓
+#    - 修改持仓/止损/止盈
+# ✅ 只有以下两个主体可以执行交易：
+#    1. 用户（hu la）— 通过前端手动操作
+#    2. 策略引擎 — 通过 _check_signal / _execute_deepseek_signal 自动执行
+# Claude 的职责：写代码、优化策略、分析数据、修 Bug，不碰交易按钮。
 app.router.add_get("/api/snapshots", api_snapshots)
 
 app.router.add_static("/static/", WEB_DIR)
