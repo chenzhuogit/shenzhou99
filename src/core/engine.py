@@ -679,20 +679,41 @@ class TradingEngine:
         if confidence < min_conf:
             return None
 
-        # 不追涨杀跌：离 EMA 太远不入场
-        if distance_to_ema > 1.5:
+        # 不追涨杀跌：离 EMA 太远不入场（收紧到 1.2ATR）
+        if distance_to_ema > 1.2:
             logger.info(f"⏸️ {inst_id} | 离EMA太远({distance_to_ema:.1f}ATR)，不追")
             return None
 
+        # ═══ BTC 额外过滤（BTC胜率29%，最大亏损源） ═══
+        if "BTC" in inst_id:
+            if adx < 30:  # BTC 要更强趋势
+                logger.info(f"⏸️ BTC | ADX={adx:.0f}<30 趋势不够强，跳过")
+                return None
+            if confidence < 0.68:  # BTC 要更高信心
+                logger.info(f"⏸️ BTC | 信心{confidence:.0%}<68%，跳过")
+                return None
+
+        # ═══ 手续费预估检查：确保预期盈利能覆盖手续费 ═══
+        # taker 费率约 0.05%，开+平 = 0.1%，杠杆放大后的名义价值
+        est_fee_pct = 0.001  # 0.1% 双向手续费
+        # 止损距离必须 > 手续费+滑点损耗的 3 倍（否则盈亏比太差）
+
         if trend_4h == "long":
             if current_price < ema50_1h:
-                return None  # 跌破 1H EMA50 趋势可能变了
-            if rsi_1h > 75:
-                return None  # 超买不追
+                return None
+            if rsi_1h > 70:  # 从75收紧到70
+                return None
 
-            # 止损：4H EMA50 下方（趋势线不破就不出），至少 1.5 ATR 留空间
+            # 止损：4H EMA50 下方，至少 1.5 ATR
             sl = min(ema50_4h - atr_4h * 0.5, current_price - atr_4h * 1.5)
             tp = current_price + atr_4h * 2.35
+
+            # 止盈距离必须 > 0.3%（覆盖手续费+滑点）
+            tp_pct = abs(tp - current_price) / current_price
+            if tp_pct < 0.003:
+                logger.info(f"⏸️ {inst_id} | TP距离{tp_pct:.2%}太小，手续费吃掉利润")
+                return None
+
             rr = abs(tp - current_price) / abs(current_price - sl)
             if rr < 1.5:
                 return None
@@ -709,11 +730,17 @@ class TradingEngine:
         elif trend_4h == "short":
             if current_price > ema50_1h:
                 return None
-            if rsi_1h < 25:
+            if rsi_1h < 30:  # 从25收紧到30
                 return None
 
             sl = max(ema50_4h + atr_4h * 0.5, current_price + atr_4h * 1.5)
             tp = current_price - atr_4h * 2.35
+
+            tp_pct = abs(current_price - tp) / current_price
+            if tp_pct < 0.003:
+                logger.info(f"⏸️ {inst_id} | TP距离{tp_pct:.2%}太小，手续费吃掉利润")
+                return None
+
             rr = abs(current_price - tp) / abs(sl - current_price)
             if rr < 1.5:
                 return None
@@ -801,17 +828,17 @@ class TradingEngine:
             if atr > 0 and signal.price > 0:
                 atr_pct = atr / signal.price
 
-        # 基础杠杆 = 信心映射（趋势确认后敢于加杠杆）
+        # 基础杠杆 = 信心映射（降杠杆：手续费占亏损61%，杠杆越高手续费越贵）
         if conf >= 0.85:
-            base = 8
-        elif conf >= 0.75:
-            base = 7
-        elif conf >= 0.65:
             base = 6
-        elif conf >= 0.55:
+        elif conf >= 0.75:
             base = 5
-        else:
+        elif conf >= 0.65:
+            base = 4
+        elif conf >= 0.55:
             base = 3
+        else:
+            base = 2
 
         # 波动率：高波动降杠杆，低波动加杠杆
         if atr_pct > 0.012:
@@ -832,7 +859,7 @@ class TradingEngine:
         elif losses >= 2:
             base -= 1
 
-        leverage = max(3, min(base, 10))
+        leverage = max(2, min(base, 6))  # 上限从10降到6
 
         logger.info(
             f"⚙️ 杠杆={leverage}x | 信心{conf:.0%} ATR{atr_pct:.3%} RR={rr:.1f} 连亏{losses} "
@@ -1165,8 +1192,15 @@ class TradingEngine:
                 "entry_time": time.time(),
             }
 
+            # 写入 positions 表（前端显示用）
+            await Database.execute(
+                "UPDATE positions SET stop_loss=%s, take_profit=%s "
+                "WHERE inst_id=%s AND pos_side=%s AND status='open'",
+                (signal.stop_loss, signal.take_profit, inst_id, pos_side)
+            )
+
             await SystemLogDAO.log("INFO", "engine",
-                f"🛡️ SL={signal.stop_loss:.2f} 安全网TP={safety_tp:.2f if atr > 0 else 0:.2f} | {inst_id}")
+                f"🛡️ SL={signal.stop_loss:.2f} TP={signal.take_profit:.2f} 安全网={safety_tp:.2f if atr > 0 else 0:.2f} | {inst_id}")
 
         except Exception as e:
             logger.error(f"止损止盈设置异常: {e}")
@@ -1402,6 +1436,11 @@ class TradingEngine:
             )
             if resp.get("code") == "0":
                 state["current_sl"] = new_sl
+                # 同步到 DB（前端显示）
+                await Database.execute(
+                    "UPDATE positions SET stop_loss=%s WHERE inst_id=%s AND pos_side=%s AND status='open'",
+                    (new_sl, inst_id, pos_side)
+                )
                 await SystemLogDAO.log("INFO", "engine",
                     f"🛡️ 止损更新: {inst_id} {pos_side} SL→{new_sl:.2f}")
             else:
