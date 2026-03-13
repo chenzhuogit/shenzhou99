@@ -121,7 +121,11 @@ def _enrich_positions_with_ticker(positions: list, ticker_cache: dict) -> list:
 
 
 async def api_dashboard(request):
-    """前端仪表盘一次拉取所有数据"""
+    """前端仪表盘一次拉取所有数据（3秒缓存）"""
+    cached = cache_get("dashboard")
+    if cached:
+        return json_response(cached)
+
     (
         assets, positions, today_stats, win_loss, cum_pnl,
         snapshot, modules, recent_orders, recent_logs, risk_logs,
@@ -156,9 +160,8 @@ async def api_dashboard(request):
     total_trades_all = wins + losses
     win_rate = (wins / total_trades_all * 100) if total_trades_all > 0 else 0
 
-    return json_response({
+    result = {
         "stats": {
-            "total_asset": total_asset,
             "position_count": len(positions),
             "max_positions": 5,
             "today_trades": safe_int(today_stats.get("total")) if today_stats else 0,
@@ -182,7 +185,9 @@ async def api_dashboard(request):
         "modules": modules,
         "logs": recent_logs,
         "risk_logs": risk_logs,
-    })
+    }
+    cache_set("dashboard", result, ttl=3)
+    return json_response(result)
 
 
 # ═══ 资产 ═══
@@ -239,6 +244,11 @@ async def api_trade_records(request):
     limit = int(request.query.get("limit", 50))
     status_filter = request.query.get("status", "")  # open / closed / 空=全部
 
+    cache_key = f"trade_records:{limit}:{status_filter}"
+    cached = cache_get(cache_key)
+    if cached:
+        return json_response(cached)
+
     where = ""
     params = []
     if status_filter:
@@ -273,26 +283,9 @@ async def api_trade_records(request):
         LIMIT %s
     """, (*params, limit))
 
-    # ── 批量查询已平仓持仓的真实盈亏（从 trades 表） ──
-    closed_pnl_map = {}  # (inst_id, pos_side, opened_at) → {pnl, fee, net}
-    closed_positions = [(r["inst_id"], r["pos_side"], r["opened_at"], r["closed_at"])
-                        for r in rows if r.get("pos_status") == "closed" or r.get("status") == "closed"]
-    if closed_positions:
-        for inst_id, pos_side, opened_at, closed_at in closed_positions:
-            if not opened_at or not closed_at:
-                continue
-            trade_rows = await Database.fetch_all("""
-                SELECT COALESCE(SUM(pnl), 0) as total_pnl, COALESCE(SUM(fee), 0) as total_fee
-                FROM trades
-                WHERE inst_id = %s AND pos_side = %s
-                  AND traded_at >= %s AND traded_at <= DATE_ADD(%s, INTERVAL 2 MINUTE)
-            """, (inst_id, pos_side, opened_at, closed_at))
-            if trade_rows:
-                pnl = float(trade_rows[0]["total_pnl"])
-                fee = float(trade_rows[0]["total_fee"])
-                closed_pnl_map[(inst_id, pos_side, str(opened_at))] = {
-                    "pnl": pnl, "fee": fee, "net": pnl + fee
-                }
+    # ── 已平仓盈亏：直接用 positions.realized_pnl（已修正为净盈亏含手续费） ──
+    # 不再逐条子查询 trades 表（15次×343ms = 5秒延迟的根因）
+    closed_pnl_map = {}
 
     records = []
     seen_ids = set()
@@ -373,24 +366,30 @@ async def api_trade_records(request):
         }
         records.append(record)
 
+    cache_set(cache_key, records, ttl=5)
     return json_response(records)
 
 
 # ═══ 熔断状态 ═══
 async def api_circuit_breaker_status(request):
-    """获取熔断状态"""
+    """获取熔断状态（5秒缓存）"""
+    cached = cache_get("circuit_breaker")
+    if cached:
+        return json_response(cached)
     from src.data.dao import ConfigDAO
     is_paused = (await ConfigDAO.get("circuit_breaker_paused")) == "1"
     reason = (await ConfigDAO.get("circuit_breaker_reason")) or ""
     daily_pnl_str = (await ConfigDAO.get("daily_pnl")) or "0"
     daily_pnl = float(daily_pnl_str)
 
-    return json_response({
+    result = {
         "is_paused": is_paused,
         "reason": reason,
         "daily_pnl": daily_pnl,
         "circuit_limit": 50.0,
-    })
+    }
+    cache_set("circuit_breaker", result, ttl=5)
+    return json_response(result)
 
 
 async def api_circuit_breaker_resume(request):
@@ -403,8 +402,12 @@ async def api_circuit_breaker_resume(request):
 
 # ═══ DeepSeek 日志 ═══
 async def api_deepseek_logs(request):
-    """DeepSeek 策略引擎专属日志"""
+    """DeepSeek 策略引擎专属日志（5秒缓存）"""
     limit = int(request.query.get("limit", 30))
+    cache_key = f"deepseek:{limit}"
+    cached = cache_get(cache_key)
+    if cached:
+        return json_response(cached)
     logs = await Database.fetch_all(
         "SELECT * FROM system_logs WHERE module='deepseek' ORDER BY id DESC LIMIT %s",
         (limit,)
@@ -413,10 +416,9 @@ async def api_deepseek_logs(request):
     ds_module = await Database.fetch_one(
         "SELECT * FROM module_status WHERE module_name='deepseek_advisor'"
     )
-    return json_response({
-        "logs": logs,
-        "status": ds_module,
-    })
+    result = {"logs": logs, "status": ds_module}
+    cache_set(cache_key, result, ttl=5)
+    return json_response(result)
 
 
 # ═══ 日志 ═══
@@ -560,8 +562,25 @@ async def api_health(request):
 
 
 # ═══ 应用生命周期 ═══
+# ═══ API 缓存层（减少 DB 往返，每次往返 ~160ms） ═══
+_api_cache: dict[str, tuple] = {}  # key → (data, expire_time)
+
+def cache_get(key: str):
+    """获取缓存，过期返回 None"""
+    if key in _api_cache:
+        data, expires = _api_cache[key]
+        if time.time() < expires:
+            return data
+        del _api_cache[key]
+    return None
+
+def cache_set(key: str, data, ttl: float = 3.0):
+    """设置缓存，默认 3 秒 TTL"""
+    _api_cache[key] = (data, time.time() + ttl)
+
+
 async def on_startup(app):
-    await Database.init_pool()
+    await Database.init_pool(min_size=3, max_size=15)
 
 async def on_cleanup(app):
     await Database.close_pool()
