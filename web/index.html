@@ -196,7 +196,7 @@ tr:hover { background: var(--bg3); }
     <div class="panel-body"><div class="module-grid" id="moduleGrid"><div class="empty">加载中...</div></div></div>
   </div>
 
-  <!-- 当前持仓 -->
+  <!-- 持仓 + 资产 水平排列 -->
   <div class="panel">
     <div class="panel-header">
       <h2>📋 当前持仓</h2>
@@ -205,6 +205,21 @@ tr:hover { background: var(--bg3); }
     <div class="panel-body">
       <table><thead><tr><th>品种</th><th>方向</th><th>数量</th><th>开仓价</th><th>现价</th><th>盈亏</th><th>操作</th></tr></thead>
       <tbody id="positionsTable"><tr><td colspan="7" class="empty">加载中...</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <h2>💎 账户资产</h2>
+      <button class="btn" onclick="refreshData()">刷新</button>
+    </div>
+    <div class="panel-body">
+      <!-- 资产概览卡片 -->
+      <div id="assetOverview" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"></div>
+      <!-- 资产占比条 -->
+      <div class="asset-bar" id="assetBar"></div>
+      <!-- 资产明细 -->
+      <ul class="asset-list" id="assetList"><li class="empty">加载中...</li></ul>
     </div>
   </div>
 
@@ -221,18 +236,6 @@ tr:hover { background: var(--bg3); }
     </div>
     <div class="panel-body" style="max-height:600px;">
       <div id="tradeRecords"><div class="empty">加载中...</div></div>
-    </div>
-  </div>
-
-  <!-- 资产管理 -->
-  <div class="panel">
-    <div class="panel-header">
-      <h2>💎 账户资产管理</h2>
-      <button class="btn" onclick="refreshData()">刷新</button>
-    </div>
-    <div class="panel-body">
-      <div class="asset-bar" id="assetBar"></div>
-      <ul class="asset-list" id="assetList"><li class="empty">加载中...</li></ul>
     </div>
   </div>
 
@@ -470,23 +473,62 @@ function renderPositions(positions) {
 function renderAssets(assets) {
   const bar = document.getElementById('assetBar');
   const list = document.getElementById('assetList');
-  if (!assets || !assets.length) { bar.innerHTML=''; list.innerHTML='<li class="empty">暂无资产</li>'; return; }
-  const colors = { USDT:'#26a17b', BTC:'#f7931a', ETH:'#627eea', SOL:'#9945ff', DOGE:'#c2a633', XRP:'#00aae4', ADA:'#0d1e30', AVAX:'#e84142' };
-  const total = assets.reduce((s,a) => s + Number(a.usd_value||0), 0) || 1;
+  const overview = document.getElementById('assetOverview');
+  if (!assets || !assets.length) { bar.innerHTML=''; list.innerHTML='<li class="empty">暂无资产</li>'; overview.innerHTML=''; return; }
 
+  const colors = { USDT:'#26a17b', BTC:'#f7931a', ETH:'#627eea', SOL:'#9945ff', DOGE:'#c2a633', XRP:'#00aae4', ADA:'#0d1e30', AVAX:'#e84142' };
+
+  // 计算汇总
+  const usdt = assets.find(a => a.currency === 'USDT') || {};
+  const totalEquity = Number(usdt.equity || usdt.usd_value || 0);
+  const available = Number(usdt.available || 0);
+  const frozen = Number(usdt.frozen || 0);
+  const balance = Number(usdt.balance || 0);
+  const upl = dashData?.stats?.unrealized_pnl || 0;
+  const todayPnl = dashData?.stats?.today_pnl || 0;
+  const marginUsed = frozen;
+  const marginPct = totalEquity > 0 ? (marginUsed / totalEquity * 100) : 0;
+
+  // 概览卡片
+  const makeCard = (label, value, color, sub) =>
+    `<div style="background:var(--bg3);border-radius:8px;padding:10px 12px;border:1px solid var(--border);">
+      <div style="font-size:10px;color:var(--text2);text-transform:uppercase;">${label}</div>
+      <div style="font-size:16px;font-weight:700;color:${color};margin-top:3px;">${value}</div>
+      ${sub ? `<div style="font-size:10px;color:var(--text2);margin-top:2px;">${sub}</div>` : ''}
+    </div>`;
+
+  overview.innerHTML = [
+    makeCard('总权益', `$${fmt(totalEquity)}`, 'var(--cyan)', `余额 ${fmt(balance)} USDT`),
+    makeCard('可用余额', `$${fmt(available)}`, 'var(--green)', `占比 ${(available/Math.max(totalEquity,1)*100).toFixed(0)}%`),
+    makeCard('已用保证金', `$${fmt(marginUsed)}`, marginPct > 50 ? 'var(--red)' : 'var(--yellow)', `占比 ${marginPct.toFixed(1)}%`),
+    makeCard('今日盈亏', `${todayPnl >= 0 ? '+' : ''}$${fmt(todayPnl)}`, todayPnl >= 0 ? 'var(--green)' : 'var(--red)',
+      `未实现 ${upl >= 0 ? '+' : ''}$${fmt(upl)}`),
+  ].join('');
+
+  // 资产占比条
+  const total = assets.reduce((s,a) => s + Number(a.usd_value||0), 0) || 1;
   bar.innerHTML = assets.filter(a=>Number(a.usd_value)>0).map(a =>
     `<div class="asset-segment" style="width:${(Number(a.usd_value)/total*100).toFixed(1)}%;background:${colors[a.currency]||'#666'};" title="${a.currency}: $${fmt(a.usd_value)}"></div>`
   ).join('');
 
-  list.innerHTML = assets.map(a => `
-    <li class="asset-item">
+  // 明细列表
+  list.innerHTML = assets.map(a => {
+    const eq = Number(a.equity || a.usd_value || 0);
+    const avl = Number(a.available || 0);
+    const frz = Number(a.frozen || 0);
+    return `<li class="asset-item" style="flex-wrap:wrap;">
       <div class="coin"><div class="coin-dot" style="background:${colors[a.currency]||'#666'};"></div>${a.currency}</div>
-      <div class="values">
-        <div>${Number(a.balance).toFixed(a.currency==='USDT'?2:6)}</div>
+      <div class="values" style="text-align:right;">
+        <div style="font-weight:600;">${Number(a.balance).toFixed(a.currency==='USDT'?2:6)}</div>
         <div class="usd">≈ $${fmt(a.usd_value)}</div>
       </div>
-    </li>
-  `).join('');
+      <div style="width:100%;display:flex;gap:12px;font-size:10px;color:var(--text2);margin-top:4px;padding-left:20px;">
+        <span>可用: ${avl.toFixed(2)}</span>
+        <span>冻结: ${frz.toFixed(2)}</span>
+        <span>权益: ${eq.toFixed(2)}</span>
+      </div>
+    </li>`;
+  }).join('');
 }
 
 function renderCircuitBreaker(data) {
