@@ -31,8 +31,8 @@ AUTH_USERS = {
 _tokens: dict[str, dict] = {}
 TOKEN_EXPIRE = 7 * 24 * 3600  # 7天有效
 
-# 不需要认证的路径
-PUBLIC_PATHS = {"/login", "/health", "/api/login"}
+# 不需要认证的路径（页面本身公开，API 需要认证）
+PUBLIC_PATHS = {"/", "/login", "/health", "/api/login"}
 
 
 def json_serial(obj):
