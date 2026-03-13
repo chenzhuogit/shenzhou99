@@ -1,0 +1,75 @@
+# 神州99 系统配置
+
+system:
+  name: "Shenzhou99"
+  version: "0.1.0"
+  mode: "paper"  # paper | live
+  log_level: "INFO"
+
+# OKX 交易所配置
+exchange:
+  name: "okx"
+  base_url: "https://www.okx.com"
+  ws_public: "wss://ws.okx.com:8443/ws/v5/public"
+  ws_private: "wss://ws.okx.com:8443/ws/v5/private"
+  ws_business: "wss://ws.okx.com:8443/ws/v5/business"
+  # 模拟盘
+  demo_base_url: "https://www.okx.com"
+  demo_ws_public: "wss://wspap.okx.com:8443/ws/v5/public?brokerId=9999"
+  demo_ws_private: "wss://wspap.okx.com:8443/ws/v5/private?brokerId=9999"
+  demo_ws_business: "wss://wspap.okx.com:8443/ws/v5/business?brokerId=9999"
+
+# 交易品种
+instruments:
+  spot:
+    - "BTC-USDT"
+    - "ETH-USDT"
+  swap:
+    - "BTC-USDT-SWAP"
+    - "ETH-USDT-SWAP"
+
+# 风控配置
+risk:
+  max_loss_per_trade: 0.02        # 单笔最大亏损 2%
+  max_daily_loss: 0.05            # 单日最大亏损 5%
+  max_drawdown: 0.10              # 最大回撤 10%
+  max_positions: 5                # 最大同时持仓数
+  max_leverage: 10                # 最大杠杆
+  min_reward_risk_ratio: 1.5      # 最小盈亏比
+  consecutive_loss_reduce: 3      # 连续亏损N笔后减仓
+  consecutive_loss_reduce_pct: 0.5  # 减仓比例
+  margin_mode: "isolated"         # cross | isolated
+  flash_crash_threshold: 0.03     # 1分钟波动>3%暂停
+  spread_threshold: 0.005         # 买卖价差>0.5%拒绝交易
+
+# 仓位管理
+position:
+  default_risk_pct: 0.01          # 默认风险比例 1%
+  max_position_pct: 0.20          # 单品种最大仓位 20%
+  kelly_fraction: 0.25            # Kelly系数缩减因子
+  pyramid_levels: 3               # 金字塔加仓层数
+  pyramid_reduce: 0.5             # 每层递减比例
+
+# 通知配置
+notification:
+  enabled: true
+  telegram:
+    enabled: false
+    bot_token: ""
+    chat_id: ""
+  email:
+    enabled: false
+    smtp_server: ""
+    smtp_port: 587
+    sender: ""
+    receiver: ""
+
+# 数据存储
+database:
+  type: "mysql"
+  mysql:
+    host: "rm-hp3mjdo8oxy5j35aqko.mysql.huhehaote.rds.aliyuncs.com"
+    port: 3306
+    user: "application"
+    database: "shenzhou99"
+    charset: "utf8mb4"

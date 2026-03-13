@@ -1,0 +1,69 @@
+# 策略配置
+
+strategies:
+  trend_following:
+    enabled: true
+    instruments: ["BTC-USDT-SWAP", "ETH-USDT-SWAP"]
+    timeframes:
+      primary: "4h"       # 主趋势判定
+      entry: "1h"         # 入场时机
+      trigger: "15m"      # 精确触发
+    indicators:
+      ema_fast: 20
+      ema_mid: 50
+      ema_slow: 200
+      macd_fast: 12
+      macd_slow: 26
+      macd_signal: 9
+      rsi_period: 14
+      atr_period: 14
+    params:
+      atr_stop_multiplier: 2.0    # 止损 = ATR × 2
+      trailing_stop_atr: 1.5      # 移动止盈 = ATR × 1.5
+      min_trend_strength: 0.6     # 最低趋势强度
+
+  mean_reversion:
+    enabled: true
+    instruments: ["BTC-USDT", "ETH-USDT"]
+    timeframes:
+      primary: "1h"
+    indicators:
+      bb_period: 20
+      bb_std: 2.0
+      rsi_period: 14
+      rsi_overbought: 70
+      rsi_oversold: 30
+    params:
+      entry_bb_position: 0.05     # 触及布林带 5% 以内开仓
+      stop_loss_bb_std: 2.5       # 止损在 2.5 倍标准差
+      take_profit_bb_position: 0.5  # 止盈在布林带中轨
+
+  momentum_breakout:
+    enabled: false
+    instruments: ["BTC-USDT-SWAP"]
+    timeframes:
+      primary: "1h"
+      confirm: "15m"
+    indicators:
+      lookback_period: 20
+      volume_multiplier: 1.5      # 成交量需 > 1.5 倍均量
+      atr_period: 14
+    params:
+      breakout_confirm_candles: 2  # 突破确认K线数
+      stop_loss_atr: 1.5
+
+  funding_arbitrage:
+    enabled: false
+    instruments: ["BTC-USDT-SWAP"]
+    params:
+      min_funding_rate: 0.001     # 最低 0.1% 费率开仓
+      max_position_pct: 0.30      # 最大仓位 30%
+      close_funding_rate: 0.0003  # 费率降至 0.03% 平仓
+
+  grid_trading:
+    enabled: false
+    instruments: ["BTC-USDT"]
+    params:
+      grid_count: 20              # 网格数
+      price_range_atr: 4.0        # 价格范围 = ATR × 4
+      per_grid_amount_pct: 0.02   # 每格投入 2% 资金
