@@ -358,6 +358,37 @@ tr:hover { background: var(--bg3); }
 
 <script>
 const API = '';
+
+// 合约面值映射 (1张=多少币)
+const CT_VAL = {
+  "ETH-USDT-SWAP":0.1,"BTC-USDT-SWAP":0.01,"SOL-USDT-SWAP":1,"TRUMP-USDT-SWAP":0.1,
+  "DOGE-USDT-SWAP":1000,"RIVER-USDT-SWAP":0.1,"XRP-USDT-SWAP":100,"XAU-USDT-SWAP":0.001,
+  "PEPE-USDT-SWAP":10000000,"HYPE-USDT-SWAP":0.1,"TURBO-USDT-SWAP":10000,"PI-USDT-SWAP":1,
+  "SUI-USDT-SWAP":1,"ENSO-USDT-SWAP":1,"ZEC-USDT-SWAP":0.01,"ADA-USDT-SWAP":100,
+  "BNB-USDT-SWAP":0.01,"RESOLV-USDT-SWAP":10,"TAO-USDT-SWAP":0.01,"TRIA-USDT-SWAP":100,
+  "CL-USDT-SWAP":0.1,"PUMP-USDT-SWAP":1000,"FIL-USDT-SWAP":0.1,"XAG-USDT-SWAP":0.01,
+  "LINK-USDT-SWAP":1,"BCH-USDT-SWAP":0.1,"PIPPIN-USDT-SWAP":10,"XPL-USDT-SWAP":10,
+  "AVAX-USDT-SWAP":1,"AAVE-USDT-SWAP":0.1,"WLFI-USDT-SWAP":10,"RENDER-USDT-SWAP":1,
+  "WLD-USDT-SWAP":1,"UNI-USDT-SWAP":1,"AVNT-USDT-SWAP":1,"PENGU-USDT-SWAP":100,
+  "NEAR-USDT-SWAP":10,"DOT-USDT-SWAP":1,"LTC-USDT-SWAP":1,"ROBO-USDT-SWAP":100,
+  "WIF-USDT-SWAP":1,"SHIB-USDT-SWAP":1000000,"FLOW-USDT-SWAP":10,"MOODENG-USDT-SWAP":10,
+  "GALA-USDT-SWAP":10,"HUMA-USDT-SWAP":100,"NIGHT-USDT-SWAP":100,"ICP-USDT-SWAP":0.01,
+  "ASTER-USDT-SWAP":1,"OKB-USDT-SWAP":0.01,"CRV-USDT-SWAP":1,"BARD-USDT-SWAP":1,
+  "RAVE-USDT-SWAP":10,"OP-USDT-SWAP":1,"BEAT-USDT-SWAP":10,"ARB-USDT-SWAP":10,
+  "OPN-USDT-SWAP":10,"APT-USDT-SWAP":1,"ETC-USDT-SWAP":10,"SAHARA-USDT-SWAP":10,
+  "LIT-USDT-SWAP":1,"MMT-USDT-SWAP":10,"IP-USDT-SWAP":1,"VIRTUAL-USDT-SWAP":1,
+  "XLM-USDT-SWAP":100,"ENA-USDT-SWAP":10,"F-USDT-SWAP":100,"KAT-USDT-SWAP":100,
+  "BONK-USDT-SWAP":100000,"ORDI-USDT-SWAP":0.1,"TRX-USDT-SWAP":1000,"HBAR-USDT-SWAP":100,
+  "CFX-USDT-SWAP":10,"FARTCOIN-USDT-SWAP":1,"CHZ-USDT-SWAP":10,"BERA-USDT-SWAP":0.1,
+  "DOOD-USDT-SWAP":1000,"SATS-USDT-SWAP":10000000,"SIGN-USDT-SWAP":100,"AR-USDT-SWAP":0.1,
+  "ZRO-USDT-SWAP":1,"MEME-USDT-SWAP":100,"ARKM-USDT-SWAP":1,"ESP-USDT-SWAP":100,
+  "ONDO-USDT-SWAP":10,"JELLYJELLY-USDT-SWAP":100,"AXS-USDT-SWAP":0.1,"PNUT-USDT-SWAP":10,
+  "DYDX-USDT-SWAP":1,"GRT-USDT-SWAP":10,"ATOM-USDT-SWAP":1,"GRASS-USDT-SWAP":1,
+  "ALGO-USDT-SWAP":10,"PEOPLE-USDT-SWAP":100,"H-USDT-SWAP":100,"BABY-USDT-SWAP":10,
+  "POL-USDT-SWAP":10,"SPACE-USDT-SWAP":100,"CRCL-USDT-SWAP":1,"ZAMA-USDT-SWAP":10,
+  "HMSTR-USDT-SWAP":100,"W-USDT-SWAP":1,"STRK-USDT-SWAP":1,"TON-USDT-SWAP":1,
+  "SEI-USDT-SWAP":10,"MANA-USDT-SWAP":10,"INJ-USDT-SWAP":0.1,
+};
 let currentLogFilter = '';
 let dashData = null;
 
@@ -938,7 +969,7 @@ function renderTradeRecords(records) {
     }
 
     // 名义价值
-    const ctVal = r.inst_id.includes('BTC') ? 0.01 : r.inst_id.includes('ETH') ? 0.1 : 1;
+    const ctVal = CT_VAL[r.inst_id] || 1;
     const entryPx = r.filled_price || r.avg_price;
     const notional = r.size * ctVal * entryPx;
     const marginUsed = r.margin || (notional / (r.leverage || 5));
@@ -1055,9 +1086,9 @@ function copyTrade(btn) {
     const dir = r.pos_side === 'long' ? '做多' : '做空';
     const status = r.pos_status === 'open' ? '持仓中' : '已平仓';
     const pnl = r.pos_status === 'open' ? (r.unrealized_pnl || 0) : (r.realized_pnl || 0);
-    const ctVal = r.inst_id.includes('BTC') ? 0.01 : r.inst_id.includes('ETH') ? 0.1 : 1;
+    const ctVal2 = CT_VAL[r.inst_id] || 1;
     const entryPx = r.filled_price || r.avg_price;
-    const notional = r.size * ctVal * entryPx;
+    const notional = r.size * ctVal2 * entryPx;
     const margin = r.margin || (notional / (r.leverage || 5));
 
     const lines = [
