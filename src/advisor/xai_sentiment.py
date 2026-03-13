@@ -309,12 +309,19 @@ class XAISentimentAnalyzer:
             summary[coin] = {
                 "sentiment": r.sentiment,
                 "score": r.score,
+                "confidence": r.confidence,
                 "fear_greed": r.fear_greed,
                 "fear_greed_score": r.fear_greed_score,
+                "bullish_pct": r.bullish_pct,
+                "bearish_pct": r.bearish_pct,
+                "mention_volume": r.mention_volume,
+                "trend": r.trend,
                 "whale": "吸筹" if r.whale_accumulating else ("出货" if r.whale_distributing else "中性"),
                 "signal": r.trading_signal,
+                "signal_reason": r.signal_reason,
                 "fomo": r.fomo_level,
                 "narratives": r.narratives[:3],
+                "fud_alerts": r.fud_alerts[:2],
                 "error": r.error,
             }
         return summary
