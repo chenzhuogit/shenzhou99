@@ -1505,7 +1505,13 @@ class TradingEngine:
             await asyncio.sleep(300)  # 5 分钟
 
     async def _execute_deepseek_signal(self, ds_signal: dict):
-        """执行 DeepSeek 产生的交易信号"""
+        """
+        执行 DeepSeek 产生的交易信号
+
+        v3: 强制趋势一致性检查 — DeepSeek 不允许逆势开仓
+        问题：DeepSeek 基于 RSI 超买/超卖做反向交易 = 均值回归 = 逆势 = 亏损
+        规则：DeepSeek 信号方向必须与 4H 趋势一致，否则拒绝
+        """
         inst_id = ds_signal.get("inst_id", "")
         direction = ds_signal.get("direction", "")
         confidence = float(ds_signal.get("confidence", 0))
@@ -1519,12 +1525,58 @@ class TradingEngine:
         if confidence < 0.5 or not inst_id or not direction:
             return
 
+        # ═══ 强制趋势一致性：不允许逆势开仓 ═══
+        if inst_id in self._klines:
+            klines = self._klines[inst_id]
+
+            # 4H 趋势判断
+            trend_4h = "neutral"
+            if "4H" in klines and len(klines["4H"]) >= 50:
+                close_4h = klines["4H"]["close"]
+                ema20_4h = close_4h.ewm(span=20, adjust=False).mean().iloc[-1]
+                ema50_4h = close_4h.ewm(span=53, adjust=False).mean().iloc[-1]
+                cur_px = close_4h.iloc[-1]
+                if ema20_4h > ema50_4h and cur_px > ema20_4h:
+                    trend_4h = "long"
+                elif ema20_4h < ema50_4h and cur_px < ema20_4h:
+                    trend_4h = "short"
+
+            # 逆势检查
+            if trend_4h != "neutral":
+                if direction == "short" and trend_4h == "long":
+                    logger.warning(
+                        f"🚫 DeepSeek 逆势信号被拒: {inst_id} 想做空但 4H 趋势=多头 | {reason[:50]}")
+                    await SystemLogDAO.log("WARN", "deepseek",
+                        f"🚫 逆势做空被拒 {inst_id}: 4H多头趋势中不做空 | {reason[:60]}")
+                    return
+                if direction == "long" and trend_4h == "short":
+                    logger.warning(
+                        f"🚫 DeepSeek 逆势信号被拒: {inst_id} 想做多但 4H 趋势=空头 | {reason[:50]}")
+                    await SystemLogDAO.log("WARN", "deepseek",
+                        f"🚫 逆势做多被拒 {inst_id}: 4H空头趋势中不做多 | {reason[:60]}")
+                    return
+
+            # ADX 趋势强度检查（无趋势不开仓）
+            if "4H" in klines and len(klines["4H"]) >= 30:
+                adx = self._calc_adx(klines["4H"])
+                min_adx = 30 if "BTC" in inst_id else 25
+                if adx < min_adx:
+                    logger.info(f"🚫 DeepSeek 信号被拒: {inst_id} ADX={adx:.0f}<{min_adx} 无趋势")
+                    return
+
         # 检查盈亏比
         if sl and tp and entry:
             risk = abs(entry - sl)
             reward = abs(tp - entry)
             if risk > 0 and reward / risk < 1.5:
                 logger.info(f"🧠 DeepSeek 信号盈亏比不足: {reward/risk:.1f}:1")
+                return
+
+        # 手续费预检
+        if entry > 0 and tp > 0:
+            tp_pct = abs(tp - entry) / entry
+            if tp_pct < 0.003:
+                logger.info(f"🚫 DeepSeek 信号被拒: {inst_id} TP距离{tp_pct:.2%}<0.3% 手续费吃利润")
                 return
 
         action = SignalAction.OPEN_LONG if direction == "long" else SignalAction.OPEN_SHORT
@@ -1541,7 +1593,7 @@ class TradingEngine:
             confidence=confidence,
         )
 
-        logger.info(f"🧠 执行 DeepSeek 信号: {inst_id} {direction} @ {entry} | {pattern} | {reason[:50]}")
+        logger.info(f"🧠 执行 DeepSeek 信号: {inst_id} {direction} @ {entry} | 趋势一致✅ | {reason[:50]}")
         await self._execute_signal(signal)
 
     async def _handle_deepseek_adjust(self, ds_adjust: dict):
