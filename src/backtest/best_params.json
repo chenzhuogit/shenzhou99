@@ -2,7 +2,7 @@
   "adx_threshold": 26,
   "adx_threshold_eth": 30,
   "min_confidence": 0.45,
-  "sl_atr_mult": 1.43,
+  "sl_atr_mult": 0.95,
   "tp_atr_mult": 2.35,
   "trailing_activate_atr": 1.72,
   "trailing_distance_atr": 0.82,
