@@ -652,7 +652,7 @@ class TradingEngine:
         # ═══ 第一关：ADX — 有没有趋势？ ═══
         adx = self._calc_adx(df_4h, 14)
         # ETH 波动大、假突破多，需要更强的趋势确认
-        adx_min = 30 if "ETH" in inst_id else 26
+        adx_min = 30 if "ETH" in inst_id else 27
         if adx < adx_min:
             logger.info(f"⏸️ {inst_id} | ADX={adx:.0f}<{adx_min} 无趋势，等待")
             return None
