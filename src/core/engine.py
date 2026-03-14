@@ -1423,11 +1423,11 @@ class TradingEngine:
 
             # 阶梯移动止损
             if pos_side == "long":
-                new_sl = avg_px + (profit_atr - 1.0) * atr * 0.6
+                new_sl = avg_px + (profit_atr - 1.0) * atr * 0.45
                 if new_sl > state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
             else:
-                new_sl = avg_px - (profit_atr - 1.0) * atr * 0.6
+                new_sl = avg_px - (profit_atr - 1.0) * atr * 0.45
                 if new_sl < state["current_sl"]:
                     await self._update_sl(inst_id, pos_side, new_sl, size, state)
 
