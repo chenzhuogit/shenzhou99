@@ -298,3 +298,34 @@ round	score	net_pnl	win_rate	sharpe	max_dd	trades	status	changes
 28	20.2479	377.33	0.467	2.10	9.5	45	discard	trailing_distance_atr: 0.45→0.3
 29	25.2116	407.77	0.467	2.24	9.5	45	discard	sl_atr_mult: 0.8→0.85
 30	6.1854	259.39	0.426	0.91	9.4	47	discard	ema_fast: 20→21 | min_confidence: 0.45→0.48
+0	26.1568	413.20	0.467	2.31	9.5	45	baseline	初始参数
+1	5.8844	-147.69	0.319	-2.59	14.7	47	discard	ema_slow: 53→48
+2	24.8123	400.06	0.467	2.23	9.5	45	discard	trailing_distance_atr: 0.45→0.55
+3	0.5979	24.60	0.408	-0.65	11.8	49	discard	ema_fast: 20→22
+4	24.7325	351.29	0.465	2.36	13.1	43	discard	adx_threshold: 27→28
+5	24.9412	401.38	0.467	2.24	9.5	45	discard	trailing_distance_atr: 0.45→0.54
+6	26.1568	413.20	0.467	2.31	9.5	45	discard	trailing_activate_atr: 1.79→1.88
+7	6.9251	129.82	0.438	0.27	13.1	48	discard	tp_atr_mult: 2.35→2.57 | adx_threshold: 27→28
+8	24.7325	351.29	0.465	2.36	13.1	43	discard	adx_threshold: 27→28
+9	1.1825	130.09	0.413	-0.46	8.0	46	discard	ema_fast: 20→25
+10	24.3377	406.16	0.467	2.25	9.6	45	discard	sl_atr_mult: 0.8→0.88
+11	19.8651	374.43	0.467	2.10	9.5	45	discard	trailing_distance_atr: 0.45→0.37
+12	23.5903	330.08	0.438	1.91	9.5	48	discard	adx_threshold: 27→26
+13	0.5979	24.60	0.408	-0.65	11.8	49	discard	ema_fast: 20→22
+14	19.8651	374.43	0.467	2.10	9.5	45	discard	trailing_distance_atr: 0.45→0.37
+15	15.4313	346.56	0.447	1.93	9.7	47	discard	cooldown_bars: 8→4
+16	23.1193	419.40	0.467	2.38	9.5	45	discard	trailing_distance_atr: 0.45→0.82
+17	19.6090	374.76	0.467	2.12	9.5	45	discard	cooldown_bars: 8→7
+18	23.9005	342.74	0.465	2.30	13.1	43	discard	adx_threshold: 27→28 | trailing_distance_atr: 0.45→0.52
+19	24.5504	407.10	0.467	2.26	9.6	45	discard	sl_atr_mult: 0.8→0.87
+20	3.5309	223.39	0.464	0.43	8.5	28	discard	tp_atr_mult: 2.35→2.02
+21	24.7670	407.97	0.467	2.27	9.5	45	discard	sl_atr_mult: 0.8→0.86
+22	25.3351	405.32	0.467	2.26	9.5	45	discard	trailing_distance_atr: 0.45→0.51
+23	26.1568	413.20	0.467	2.31	9.5	45	discard	max_distance_ema: 1.54→1.23 | adx_threshold_eth: 30→29
+24	26.1568	413.20	0.467	2.31	9.5	45	discard	max_distance_ema: 1.54→1.69
+25	28.3285	429.27	0.467	2.45	9.5	45	keep	cooldown_bars: 8→9
+26	23.7868	390.35	0.444	2.13	9.5	45	discard	min_confidence: 0.45→0.48
+27	28.3285	429.27	0.467	2.45	9.5	45	discard	max_distance_ema: 1.54→1.68
+28	28.3285	429.27	0.467	2.45	9.5	45	discard	trailing_activate_atr: 1.79→1.84
+29	19.6090	374.76	0.467	2.12	9.5	45	discard	cooldown_bars: 9→7
+30	15.3014	359.03	0.452	2.15	9.4	42	discard	cooldown_bars: 9→13

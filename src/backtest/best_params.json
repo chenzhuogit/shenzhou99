@@ -8,6 +8,6 @@
   "trailing_distance_atr": 0.45,
   "ema_fast": 20,
   "ema_slow": 53,
-  "cooldown_bars": 8,
+  "cooldown_bars": 9,
   "max_distance_ema": 1.54
 }
