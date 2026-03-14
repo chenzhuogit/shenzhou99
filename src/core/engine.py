@@ -229,18 +229,28 @@ class TradingEngine:
             # 同步熔断状态到 DB（供前端读取）
             try:
                 from src.data.dao import ConfigDAO
-                await ConfigDAO.set("circuit_breaker_paused",
-                    "1" if self.risk.state.is_trading_paused else "0")
-                await ConfigDAO.set("circuit_breaker_reason",
-                    self.risk.state.pause_reason)
+                # 只在引擎触发熔断时写 DB，不覆盖手动熔断
+                if self.risk.state.is_trading_paused:
+                    await ConfigDAO.set("circuit_breaker_paused", "1")
+                    await ConfigDAO.set("circuit_breaker_reason",
+                        self.risk.state.pause_reason)
                 await ConfigDAO.set("daily_pnl",
                     f"{self.risk.state.daily_pnl:.4f}")
 
-                # 检查人工解除标记
+                # 检查人工熔断/解除标记
+                manual_pause = await ConfigDAO.get("circuit_breaker_paused")
+                if manual_pause == "1" and not self.risk.state.is_trading_paused:
+                    # 外部（用户/Claude）手动触发了熔断
+                    self.risk.state.is_trading_paused = True
+                    self.risk.state.pause_reason = "manual_pause"
+                    await SystemLogDAO.log("WARN", "risk", "🔒 手动熔断已同步到引擎")
+                    logger.warning("🔒 手动熔断已同步到引擎")
+
                 resume = await ConfigDAO.get("circuit_breaker_resume")
                 if resume == "1":
                     msg = self.risk.manual_resume()
                     await ConfigDAO.set("circuit_breaker_resume", "0")
+                    await ConfigDAO.set("circuit_breaker_paused", "0")
                     await SystemLogDAO.log("WARN", "risk", f"🔓 {msg}")
                     logger.warning(f"🔓 {msg}")
             except Exception:
