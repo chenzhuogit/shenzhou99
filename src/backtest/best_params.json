@@ -1,5 +1,5 @@
 {
-  "adx_threshold": 27,
+  "adx_threshold": 28,
   "adx_threshold_eth": 30,
   "min_confidence": 0.45,
   "sl_atr_mult": 0.8,
